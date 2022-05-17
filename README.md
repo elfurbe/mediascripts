@@ -49,7 +49,8 @@ My assorted media manipulation scripts
 ### What even is this
 hevcmeup2 is truly the shiniest turd jewel in this shiny turd crown. I transcode a lot of video files into hevc for space saving reasons, specifically into yuv420p10le hevc (yes even SDR files, I do not care about your thoughts on transcoding 8-bit data into 10-bit pixels until you've read all of doom9 and since that will kill any human being, the problem will solve itself). I got very, very tired of hand-massaging ffmpeg command lines so I built my own wrapper to solve my specific problems. It started out quite simple, back before it had a `2` in the name. Now it's a complete bloody nightmare of bash nonsense, just absolute fucking chaos of bashisms. If you can read this whole script and not need to look up a single convoluted bash tricknique, your service to the secret fire has clearly been both lengthy and arduous.
 ### How do I use it
-Look, and I'm being real here. Probably don't. But if you decide to use it, it has help, specifically this ```bash
+Look, and I'm being real here. Probably don't. But if you decide to use it, it has help, specifically this
+```bash
 Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 
 -h|--help:     show this help message
