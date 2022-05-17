@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
+
+function ctrl_c() {
+    echo "Exiting."
+    exit 1
+}
+
+usage() {
+cat - <<EOF
+Usage: $NAME -i <INPUT FILE>
+
+-h|--help:     show this help message
+-i|--input:    file name for input
+-s|--samples:  number of crop samples to take
+-d|--debug:    output results continuously
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+            shift
+            INPUT="${1}"
+            shift;;
+    -s|--samples)
+            shift
+            SAMPLES="${1}"
+            shift;;
+    -d|--debug)
+            DEBUG=1
+            shift;;
+    -h|--help)
+            usage
+            exit;;
+    *)
+            echo "$0: invalid option ${1}"
+            echo "$0 -h for usage options"
+            usage
+            exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list, we only need these two
+TOOLS=(ffmpeg ffprobe)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "$INPUT" ]; then
+    echo "Must supply input (-i/--input) file"
+    usage
+    exit 1
+fi
+
+if [ ! -s "$INPUT" ]; then
+    echo "Error reading input file: $INPUT"
+    exit 1
+fi
+
+if [ ! -z "$SAMPLES" ]; then
+    if [ ! $SAMPLES -gt 0 ]; then
+        echo "Invalid sample count. Using defaults."
+        SAMPLES=10
+    fi
+else
+    SAMPLES=10
+fi
+
+DUR=`$FFPROBE "$INPUT" 2>&1 | grep -e DURATION -e Duration | head -n1 | awk -F': ' '{print $2}' | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | awk -F. '{print $1}'`
+if [ $DEBUG ]; then
+    echo "Duration: $DUR"
+fi
+DUR_TRIM=$((DUR - 600))
+SPLIT=$(($DUR_TRIM / $SAMPLES))
+if [ $DEBUG ]; then
+    echo "Sample length: $SPLIT"
+fi
+#CROPDETECT="cropdetect=24:16:0"
+CROPDETECT="cropdetect=.1:16:0"
+ALL_CROPS=""
+for i in `seq 1 $SAMPLES`; do
+    START=$(($SPLIT * ${i}))
+    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 |  grep -o crop=.* | sort | uniq -c | sort -n | tail -n1 | awk '{print $2}')
+    if [ $DEBUG ]; then
+        echo -e "Segment start: $START\t$CROP"
+    fi
+    ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
+done
+CROP=`echo "$ALL_CROPS" | sort -t "=" -k 2 | uniq -c | sort -n | tail -n1 | awk '{print $2}'`
+echo "$CROP"

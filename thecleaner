@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mkvmerge mkvpropedit)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+f_striptags() {
+    echo "## Stripping tags..."
+    echo "$MKVPROPEDIT $(printf "%q" "${1}") --tags all:\"\" --delete title --edit track:v1 --delete name"
+    $MKVPROPEDIT "${1}" --tags all:"" --delete title --edit track:v1 --delete name
+    if [ $? -eq 0 ]; then
+        echo "## striptags complete, tags stripped"
+    elif [ $? -eq 1 ]; then
+        echo "## striptags complete, warnings issued"
+    elif [ $? -eq 2 ]; then
+        echo "## striptags error"
+    fi
+}
+
+f_stripcovers() {
+    STRIPCOVERS=`which stripcovers`
+    echo "## Stripping covers..."
+    echo "$MKVPROPEDIT $(printf "%q" "${1}") --delete-attachment mime-type:image/jpeg"
+    $MKVPROPEDIT "${1}" --delete-attachment mime-type:image/jpeg
+    if [ $? -eq 0 ]; then
+        echo "## stripcovers complete, covers stripped"
+    elif [ $? -eq 1 ]; then
+        echo "## stripcovers complete, warnings issued"
+    elif [ $? -eq 2 ]; then
+        echo "## stripcovers error"
+    fi
+}
+
+f_addstats() {
+    echo "## Adding track statistics tags..."
+    echo "$MKVPROPEDIT --add-track-statistics-tags $(printf "%q" "${1}")"
+    $MKVPROPEDIT --add-track-statistics-tags "${1}"
+    if [ $? -eq 0 ]; then
+        echo "## Track statistics tags added"
+    elif [ $? -eq 1 ]; then
+        echo "## warnings while adding track statistics tags"
+    elif [ $? -eq 2 ]; then
+        echo "## error adding track statistics tags"
+    fi
+}
+
+if [ $# -lt 1 ]; then
+    echo "Need an input file at least."
+    echo "<input> [original audio format: dtsx,atmos,truehd,dtshd,flac,lpcm] [channel layout: 5.1, 7.1, etc] [path for output file]"
+    exit 1
+elif [ $# -eq 1 ]; then
+    INPUT="${1}"
+    OUTPUT="${INPUT:0: -4}_1.mkv"
+    IFS=""
+    MERGEOPTIONS=(-o "${OUTPUT}"
+    -a eng
+    -s eng
+    --track-name 0:\ 
+    "${INPUT}")
+    unset IFS
+elif [ $# -eq 2 ]; then
+    INPUT="$1"
+    OUTPUT="${INPUT:0: -4}_1.mkv"
+    case "$2" in
+        dtsx)  TRACKNAME="DTS-X MA";;
+        atmos) TRACKNAME="Dolby Atmos";;
+        *)     echo "Not Atmos or DTS-X, need a track layout (5.1, 7.1, etc)"; exit 1;;
+    esac
+    TRACKNAME="$TRACKNAME"
+    IFS=""
+    MERGEOPTIONS=(-o "${OUTPUT}"
+    -a eng
+    -s eng
+    --track-name 0:\ 
+    --track-name 1:"${TRACKNAME}"
+    "${INPUT}")
+    unset IFS
+elif [ $# -eq 3 ]; then
+    INPUT="$1"
+    OUTPUT="${INPUT:0: -4}_1.mkv"
+    case "$2" in
+        dtsx)   echo "No track layout allowed for object format."; exit 1;;
+        atmos)  echo "No track layout allowed for object format."; exit 1;;
+        truehd) TRACKNAME="Opus from TrueHD ${3}";;
+        dtshd)  TRACKNAME="Opus from DTS-HD MA ${3}";;
+        flac)   TRACKNAME="Opus from FLAC ${3}";;
+        lpcm)   TRACKNAME="Opus from LPCM ${3}";;
+        ac3)    TRACKNAME="Dolby AC-3 ${3}";;
+        eac3)   TRACKNAME="Dolby EAC-3 ${3}";;
+        *)      echo "Unrecognized original format."; exit 1;;
+    esac
+    IFS=""
+    MERGEOPTIONS=(-o "${OUTPUT}"
+    -a eng
+    -s eng
+    --track-name 0:\ 
+    --track-name 1:"${TRACKNAME}"
+    "${INPUT}")
+    unset IFS
+elif [ $# -eq 4 ]; then
+    INPUT="$1"
+    case "$2" in
+        dtsx)   echo "No track layout allowed for object format."; exit 1;;
+        atmos)  echo "No track layout allowed for object format."; exit 1;;
+        truehd) TRACKNAME="Opus from TrueHD ${3}";;
+        dtshd)  TRACKNAME="Opus from DTS-HD MA ${3}";;
+        flac)   TRACKNAME="Opus from FLAC ${3}";;
+        lpcm)   TRACKNAME="Opus from LPCM ${3}";;
+        ac3)    TRACKNAME="Dolby AC-3 ${3}";;
+        eac3)   TRACKNAME="Dolby EAC-3 ${3}";;
+        *)      echo "Unrecognized original format."; exit 1;;
+    esac
+    if [[ -z "${4:-}" ]]; then
+        OUTPUT="${INPUT:0: -4}_1.mkv"
+    else
+        OUTPUT="${4}/${INPUT}"
+    fi
+    IFS=""
+    MERGEOPTIONS=(-o "${OUTPUT}"
+    -a eng
+    -s eng
+    --track-name 0:\ 
+    --track-name 1:"${TRACKNAME}"
+    "${INPUT}")
+    unset IFS
+else
+    echo "Unrecognized number of arguments."
+    exit 1
+fi
+
+if [ -f "${OUTPUT}" ]; then
+    echo "Output file exists."
+    exit 1
+fi
+
+f_stripcovers "${INPUT}"
+f_striptags "${INPUT}"
+echo "## Merging..."
+echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+$MKVMERGE "${MERGEOPTIONS[@]}"
+if [ $? -eq 0 ]; then
+    echo "## Merge complete."
+else
+    echo "## merge error"
+    exit 1
+fi

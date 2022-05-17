@@ -1,0 +1,206 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: $NAME -i <INPUT FILE> -o <OUTPUT FILE>
+
+-h|--help:      show this help message
+-i|--input:     file name for input
+-o|--output:    file name for output
+-d|--debug:     print all commands and wait for keypress to continue
+--flac:         transcode all tracks to FLAC
+--opus:         transcode all tracks to Opus
+--aac:          transcode all tracks to AAC
+--vorbis:       transcode all tracks to Vorbis
+--pcmtoflac:    transcode PCM to FLAC, touch nothing else
+--audioonly:    only output audio data
+
+EOF
+}
+
+CODEC=opus
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+            shift
+            INPUT="${1}"
+            shift;;
+    -o|--output)
+            shift
+            OUTPUT="${1}"
+            shift;;
+    -d|--debug)
+            DEBUG=1
+            shift;;
+    --flac)
+            CODEC=flac
+            shift;;
+    --opus)
+            CODEC=opus
+            shift;;
+    --aac)
+            CODEC=aac
+            shift;;
+    --pcmtoflac)
+            CODEC=pcmtoflac
+            shift;;
+    --audioonly)
+            AUDIOONLY=1
+            shift;;
+    -h|--help)
+            usage
+            exit;;
+    *)
+            echo "$0: invalid option ${1}"
+            echo "$0 -h for usage options"
+            usage
+            exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
+    echo "Insufficient options provided."
+    echo "Must supply input (-i/--input) and output (-o/--output) at minimum"
+    usage
+    exit 1
+fi
+
+if [ ! -s "$INPUT" ]; then
+    echo "Error reading input file: $INPUT"
+    exit 1
+elif [ -f "$OUTPUT" ]; then
+    echo "Output file exists."
+    exit 1
+fi
+
+NL=$'\n'
+AUDIO_TRACK_META=""
+TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | jq -r '.media.track[] | select (."@type"=="Audio") | @base64'`
+IFS=$'\n'
+for TRACK in ${TRACKS}; do
+    TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | jq -r '.StreamOrder'`
+    TRACK_CODEC=`echo "${TRACK}" | base64 --decode | jq -r '.CodecID'`
+    TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | jq -r '.BitRate'`
+    TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | jq -r '.ChannelLayout'`
+    TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | jq -r '.Channels'`
+    TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+    AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
+done
+IFS="$O_IFS"
+AUDIO_TRACK_META=`echo "$AUDIO_TRACK_META" | sed 's/^$//g'`
+if [ $DEBUG ]; then
+    echo
+    echo "Input Audio Tracks"
+    echo "------------------"
+    echo "Track,Codec,BitRate,Channels,Layout${NL}${AUDIO_TRACK_META}" | column -t -s, -o " | "
+    echo
+fi
+
+AUDIO=${CODEC}
+case "${AUDIO}" in
+    flac)
+        while read -r i; do
+            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+            if [[ "$TRACK_CODEC" =~ .*"PCM".* ]]; then
+                FLAC_FLAGS="-c:a:${TRACK_NUMBER} flac $FLAC_FLAGS"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},flac,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
+            else
+                FLAC_FLAGS="-c:a:${TRACK_NUMBER} copy $FLAC_FLAGS"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
+            fi
+        done < <(echo "$AUDIO_TRACK_META")
+        echo "Output Audio Tracks"
+        echo "------------------"
+        echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+        echo
+        unset IFS
+        AUDIO_FLAGS="$AUDIO_FLAGS ${FLAC_FLAGS:0:-1}";;
+    opus)
+        while read -r i; do
+            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+            if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]] || [[ "${TRACK_CODEC}" =~ .*"FLAC".* ]]; then
+                BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                if [ $BR -eq 0 ]; then
+                    BR=576
+                fi
+                TRACK_BITRATE="${BR}k"
+                #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
+                TRACK_FLAGS="-c:a:${TRACK_NUMBER} libopus -filter:a:0 aformat=channel_layouts='7.1|5.1|stereo|mono' -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
+                OPUS_FLAGS="${OPUS_FLAGS}${TRACK_FLAGS}"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},opus,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+            else
+                OPUS_FLAGS="-c:a:${TRACK_NUMBER} copy $OPUS_FLAGS"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+            fi
+        done < <(echo "$AUDIO_TRACK_META")
+        echo "Output Audio Tracks"
+        echo "------------------"
+        echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+        echo
+        unset IFS
+        AUDIO_FLAGS="$AUDIO_FLAGS ${OPUS_FLAGS:0:-1}"
+        echo "${AUDIO_FLAGS}"
+        ;;
+    aac)
+        while read -r i; do
+            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+            if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]]; then
+                BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                if [ $BR -eq 0 ]; then
+                    BR=576
+                fi
+                TRACK_BITRATE="${BR}k"
+                #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
+                TRACK_FLAGS="-c:a:${TRACK_NUMBER} libfdk_aac -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
+                AAC_FLAGS="${AAC_FLAGS}${TRACK_FLAGS}"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},aac,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+            else
+                AAC_FLAGS="-c:a:${TRACK_NUMBER} copy $AAC_FLAGS"
+                OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+            fi
+        done < <(echo "$AUDIO_TRACK_META")
+        echo "Output Audio Tracks"
+        echo "------------------"
+        echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+        echo
+        unset IFS
+        AUDIO_FLAGS="$AUDIO_FLAGS ${AAC_FLAGS:0:-1}"
+        ;;
+    *)
+        echo "Unknown codec: ${AUDIO}"
+        exit 1;;
+esac
+
+if [ $AUDIOONLY ]; then
+    DEFAULT_FLAGS="-map 0 -map -0:d -map -0:v -map -0:s ${AUDIO_FLAGS} -max_muxing_queue_size 9999"
+else
+    DEFAULT_FLAGS="-map 0 -map -0:d -c:v copy ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
+fi
+
+if [ $DEBUG ]; then
+    echo "COMMANDS:"
+    echo "nice -n 4 $FFMPEG -i \"$INPUT\" $DEFAULT_FLAGS \"$OUTPUT\""
+    echo "$MKVPROPEDIT --add-track-statistics-tags \"$OUTPUT\""
+    #exit
+    read -p "Press y to encode, any other key to exit..." confirm
+    case $confirm in
+        [Yy] ) continue;;
+        * ) exit;;
+    esac
+fi
+
+nice -n 5 $FFMPEG -i "$INPUT" $DEFAULT_FLAGS "$OUTPUT"
+$MKVPROPEDIT --add-track-statistics-tags "$OUTPUT"

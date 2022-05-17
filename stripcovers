@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list, we only need these two
+TOOLS=(mkvpropedit)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+for FILE in "$@"; do
+    $MKVPROPEDIT "$FILE" --delete-attachment mime-type:image/jpeg
+done

@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mkvpropedit mkvmerge)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+if [ -z "$1" ]; then
+  echo "No file supplied"
+  exit
+fi
+
+truncate() {
+    echo "$@" | awk -v len=60 '{ if (length($0) > len) print substr($0, 1, len-3) "..."; else print; }'
+}
+
+echo
+FILE="$1"
+while true; do
+    video=0
+    audio=0
+    subtitle=0
+
+    JSON=`$MKVMERGE -F json --identify "$FILE"`
+    while read -r line; do
+        #echo "$line" | jq -c '.properties.track_name'
+        ID=`echo "$line" | jq -c '.id'`
+        TYPE=`echo "$line" | jq -c '.type' | sed 's/\"//g'`
+        CODEC=`echo "$line" | jq -c '.codec' | sed 's/\"//g'`
+        NAME=`echo "$line" | jq -c '.properties.track_name' | sed 's/\"//g'`
+        case $TYPE in
+            video) ((video=video+1));;
+            audio) ((audio=audio+1));;
+            subtitles) ((subtitles=subtitles+1));;
+        esac
+        SELECTOR="${TYPE:0:1}${!TYPE}"
+        track_array+=("${ID};${SELECTOR};${TYPE};${CODEC};$(truncate $NAME)")
+        #echo "${ID}; ${track_array[$ID]}"
+        #echo "${ID}; ${SELECTOR}; ${TYPE}; ${CODEC}; $(truncate $NAME)"
+    #done < <(echo "$JSON" | jq -c '.tracks[]') | column -t -s ';'
+    done < <(echo "$JSON" | jq -c '.tracks[]')
+
+    printf '%s\n' "${track_array[@]}" | column -t -s ';'
+    echo
+    echo -n "Track ID (q to quit): "
+    read -r TRACK_TO_EDIT
+    if [ "$TRACK_TO_EDIT" == "q" ]; then
+        exit 0;
+    fi
+    IFS=\; read ID SELECTOR TYPE CODEC NAME <<<"$(echo ${track_array[$TRACK_TO_EDIT]})"
+    echo -n "New track name (blank to remove): "
+    read -r TRACK_NAME
+    echo "$MKVPROPEDIT \"$FILE\" --edit track:${SELECTOR} --set \"name=$TRACK_NAME\""
+    $MKVPROPEDIT "$FILE" --edit track:${SELECTOR} --set "name=$TRACK_NAME"
+    unset track_array
+    unset video
+    unset audio
+    unset subtitles
+done

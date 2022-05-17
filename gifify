@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list, we only need these two
+TOOLS=(ffmpeg)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+SOURCE=$1
+if [ -z $2 ]; then
+    START=0
+else
+    START=$2
+fi
+if [ -z $3 ]; then
+    DURATION=0
+else
+    DURATION=$3
+fi
+
+FILENAME=$(basename "$SOURCE" | sed -e 's/^\(.*\)\..*/\1/g' -e 's/\ /_/g') 
+PALETTE="$FILENAME.png"
+GIF="$FILENAME.gif"
+
+# QUARTER FILM
+#FPS=5.99
+# HALF FILM
+#FPS=11.988
+FPS=23.98
+WIDTH=640
+#WIDTH=1280
+
+FFMPEG_TIMES=""
+
+if [ $START -ne 0 ]; then
+    FFMPEG_TIMES="-ss $START"
+fi
+if [ $DURATION -ne 0 ]; then
+    FFMPEG_TIMES="$FFMPEG_TIMES -t $DURATION"
+fi
+
+echo "$SOURCE"
+echo "$START"
+echo "$DURATION"
+echo "$FILENAME"
+echo "$GIF"
+$FFMPEG -y $FFMPEG_TIMES -i "$SOURCE" -vf fps=$FPS,scale=$WIDTH:-1:flags=lanczos,palettegen $PALETTE
+$FFMPEG $FFMPEG_TIMES -i "$SOURCE" -i $PALETTE -filter_complex "fps=$FPS,scale=$WIDTH:-1:flags=lanczos[x];[x][1:v]paletteuse" "$GIF"

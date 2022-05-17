@@ -1,0 +1,562 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
+
+-h|--help:     show this help message
+-i|--input:    file name for input
+-o|--output:   file name for output
+--start:       start time for encode (default: unset)
+--duration:    duration of encode (default: unset)
+--crf:         crf value (default varies with input res, 1080:18, 720: 22, 480: 26)
+--melton:      use Don Melton's trickeration for bitrate control
+--mbitrate:    if using --melton, use this bitrate cap
+--preset:      x265 preset value (default: medium)
+--tune:        x265 tune value (default: unset)
+--crop:        enable crop detection (default: no)
+--debug:       output commands to be run, run nothing
+--oprofile:    output profile [1080, 720, 480]
+--vf:          custom videofilter input
+--sdr:         best effort 2020->709 color fix
+--yadif:       deinterlace with yadif 
+--yadifmode:   set yadif to specific mode (default: 1, send frame per field)
+--mcdeint:     deinterlace with yadif and mcdeint (DEPRECATED)
+--nnedi:       use the power of ai to deinterlace
+--ivtc:        Inverse telecine, aka pullup (assumes NTSC DVD 29.97->23.976)
+--pullup:      Alias for --ivtc
+--fieldmatch:  Inverse telecine a different way using fieldmatch filter
+--bitdepth:    Bitdepth for pixel format (8, 10 or 12, default: 10)
+--audio:       transcode audio tracks to selected codec [flac, opus, aac]
+--square:      convert anamorphic to square pixels which make sense
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+            shift
+            INPUT="${1}"
+            shift;;
+    -o|--output)
+            shift
+            OUTPUT="${1}"
+            shift;;
+    --start)
+            shift
+            START="${1}"
+            shift;;
+    --duration)
+            shift
+            DURATION="${1}"
+            shift;;
+    --crf)
+            shift
+            CRF="${1}"
+            shift;;
+    --melton)
+            MELTON=1
+            shift;;
+    --mbitrate)
+            shift
+            MELTON_BITRATE="${1}"
+            shift;;
+    --preset)
+            shift
+            PRESET="${1}"
+            shift;;
+    --tune)
+            shift
+            TUNE="${1}"
+            shift;;
+    --crop)
+            CROP=1
+            shift;;
+    --debug)
+            DEBUG=1
+            shift;;
+    --oprofile)
+            shift
+            OPROFILE="${1}"
+            shift;;
+    --vf)
+            shift
+            VIDEOFILTER="${1}"
+            shift;;
+    --sdr)
+            SDR=1
+            shift;;
+    --yadif)
+            YADIF=1
+            shift;;
+    --yadifmode)
+            shift
+            YADIFMODE="${1}"
+            shift;;
+    --mcdeint)
+            MCDEINT=1
+            shift;;
+    --nnedi)
+            NNEDI=1
+            shift;;
+    --ivtc|--pullup)
+            IVTC=1
+            shift;;
+    --fieldmatch)
+            IVTC_FIELDMATCH=1
+            shift;;
+    --audio)
+            shift
+            AUDIO="${1}"
+            shift;;
+    --bitdepth)
+            shift
+            BITDEPTH="${1}"
+            shift;;
+    --square)
+            SQUARE=1
+            shift;;
+    -h|--help)
+            usage
+            exit;;
+    *)
+            echo "$0: invalid option ${1}"
+            echo "$0 -h for usage options"
+            usage
+            exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
+    echo "Insufficient options provided."
+    echo "Must supply input (-i/--input) and output (-o/--output) at minimum"
+    usage
+    exit 1
+fi
+
+if [ ! -s "$INPUT" ] && [[ "$INPUT" != *"%"* ]]; then
+    echo "Error reading input file: $INPUT"
+    exit 1
+elif [ -f "$OUTPUT" ]; then
+    echo "Output file exists."
+    exit 1
+fi
+
+INPUT_WIDTH=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Width'`
+INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Height'`
+
+PRESET=${PRESET:="medium"}
+if [[ "${PRESET}" != @(ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow|placebo) ]]; then
+    echo "Invalid preset \"${PRESET}\" for x265."
+    exit 1
+elif [[ "${PRESET}" == "placebo" ]]; then
+    echo "You may not use placebo. It's a placebo. This was a test and you failed."
+    exit 2
+fi
+
+if [ -z "$CRF" -a -z "$OPROFILE" ]; then
+    if [ "$INPUT_WIDTH" -gt 1280 ]; then
+        CRF=18
+    elif [ "$INPUT_WIDTH" -gt 854 ]; then
+        CRF=22
+    else
+        CRF=26
+    fi
+fi
+
+if [ $SQUARE ]; then
+    VF="scale=iw*sar:ih,setsar=1:1"
+fi
+
+if [ ! -z "$OPROFILE" ]; then
+    case "${OPROFILE}" in
+        1080)
+            VF="${VF:+${VF},}scale=1920:-1"
+            OP_CRF=18;;
+        900)
+            VF="${VF:+${VF},}scale=1600:-1"
+            OP_CRF=19;;
+        810)
+            VF="${VF:+${VF},}scale=1440:-1"
+            OP_CRF=20;;
+        720)
+            VF="${VF:+${VF},}scale=1280:-1"
+            #VF="scale=1280:-1${VF:+,${VF}}"
+            OP_CRF=22;;
+        480)
+            VF="${VF:+${VF},}scale=720:-1"
+            OP_CRF=26;;
+        1440)
+            VF="${VF:+${VF},}scale=-1:1080,crop=1440:1080:240:0"
+            OP_CRF=18;;
+        960)
+            VF="${VF:+${VF},}scale=-1:720,crop=960:720:160:0"
+            OP_CRF=22;;
+        *)
+            echo "Not a recognized output profile name."
+            exit 1;;
+    esac
+    if [ -z "$CRF" ]; then
+        CRF=$OP_CRF
+    fi
+fi
+
+BITDEPTH=${BITDEPTH:=10}
+case "${BITDEPTH}" in
+    12)
+        PIXEL_FORMAT="yuv420p12le";;
+    10)
+        PIXEL_FORMAT="yuv420p10le";;
+    8)
+        PIXEL_FORMAT="yuv420p";;
+    *)
+        echo "Bitdepth ${BITDEPTH} is invalid."
+        exit 1;;
+esac
+
+if [ $CROP ]; then
+    if [ ! -x $CROPFINDER ]; then
+        exit 1
+    fi
+
+    SEGMENTS=10
+    CFOUTPUT=$($CROPFINDER -i "$INPUT" -s $SEGMENTS -d)
+
+    if [ $DEBUG ]; then
+        echo "$CFOUTPUT"
+    fi
+    CROP=$(echo "$CFOUTPUT" | tail -n1)
+    IFS=':' read width height left top <<< "$(echo "$CROP" | awk -F= '{print $2}')"
+    if [ $width -ne $INPUT_WIDTH ]; then
+        if [ $DEBUG ]; then
+            echo "Horizontal crop detected, checking for balance"
+        fi
+        if [ $(( $width + 2 * $left )) -ne $INPUT_WIDTH ]; then
+            GUTTER_WIDTH=$(( ($INPUT_WIDTH - $width) / 2 ))
+            PAD="pad=$INPUT_WIDTH:$height:$GUTTER_WIDTH:0"
+            CROP="$CROP,$PAD"
+            if [ $DEBUG ]; then
+                echo "Unbalanced horizontal crop detected, evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTER_WIDTH)"
+                echo $CROP
+            fi
+        else
+            CROP="crop=$INPUT_WIDTH:$height:0:$top"
+            if [ $DEBUG ]; then
+                echo "Balanced horizontal crop detected, using input width ($INPUT_WIDTH) instead"
+                echo $CROP
+            fi
+        fi
+    fi
+    VF="${CROP}${VF:+,${VF}}"
+fi
+
+if [ $AUDIO ]; then        
+    NL=$'\n'
+    AUDIO_TRACK_META=""
+    TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | jq -r '.media.track[] | select (."@type"=="Audio") | @base64'`
+    IFS=$'\n'
+    for TRACK in ${TRACKS}; do
+        TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | jq -r '.StreamOrder'`
+        TRACK_CODEC=`echo "${TRACK}" | base64 --decode | jq -r '.CodecID'`
+        TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | jq -r '.BitRate'`
+        TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | jq -r '.ChannelLayout'`
+        TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | jq -r '.Channels'`
+        TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+        AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
+    done
+    IFS="$O_IFS"
+    AUDIO_TRACK_META=`echo "$AUDIO_TRACK_META" | sed 's/^$//g'`
+    if [ $DEBUG ]; then
+        echo
+        echo "Input Audio Tracks"
+        echo "------------------"
+        echo "Track,Codec,BitRate,Channels,Layout${NL}${AUDIO_TRACK_META}" | column -t -s, -o " | "
+        echo
+    fi
+
+    case "${AUDIO}" in
+        flac)
+            while read -r i; do
+                IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+                if [[ "$TRACK_CODEC" =~ .*"PCM".* ]]; then
+                    FLAC_FLAGS="-c:a:${TRACK_NUMBER} flac $FLAC_FLAGS"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},flac,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
+                else
+                    FLAC_FLAGS="-c:a:${TRACK_NUMBER} copy $FLAC_FLAGS"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
+                fi
+            done < <(echo "$AUDIO_TRACK_META")
+            echo "Output Audio Tracks"
+            echo "------------------"
+            echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+            echo
+            unset IFS
+            AUDIO_FLAGS="$AUDIO_FLAGS ${FLAC_FLAGS:0:-1}";;
+        opus)
+            while read -r i; do
+                IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+                if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]] || [[ "${TRACK_CODEC}" =~ .*"FLAC".* ]]; then
+                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|Lt\|R\|Rt~128~g' | tr -s ' ' '+' | bc)
+                    if [ $BR -eq 0 ]; then
+                        if [ $TRACK_CHANNELS -eq 8 ]; then
+                            BR=704
+                        elif [ $TRACK_CHANNELS -eq 7 ]; then
+                            BR=704
+                        elif [ $TRACK_CHANNELS -eq 6 ]; then
+                            BR=576
+                        elif [ $TRACK_CHANNELS -eq 5 ]; then
+                            BR=576
+                        elif [ $TRACK_CHANNELS -eq 2 ]; then
+                            BR=256
+                        elif [ $TRACK_CHANNELS -eq 1 ]; then
+                            BR=128
+                        else
+                            BR=576
+                        fi
+                    fi
+                    TRACK_BITRATE="${BR}k"
+                    #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
+                    TRACK_FLAGS="-c:a:${TRACK_NUMBER} libopus -filter:a:${TRACK_NUMBER} aformat=channel_layouts='7.1|5.1|stereo|mono' -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
+                    OPUS_FLAGS="${OPUS_FLAGS}${TRACK_FLAGS}"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},opus,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+                else
+                    OPUS_FLAGS="-c:a:${TRACK_NUMBER} copy $OPUS_FLAGS"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+                fi
+            done < <(echo "$AUDIO_TRACK_META")
+            echo "Output Audio Tracks"
+            echo "------------------"
+            echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+            echo
+            unset IFS
+            AUDIO_FLAGS="$AUDIO_FLAGS ${OPUS_FLAGS:0:-1}"
+            ;;
+        aac)
+            while read -r i; do
+                IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
+                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+                if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]]; then
+                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                    if [ $BR -eq 0 ]; then
+                        BR=576
+                    fi
+                    TRACK_BITRATE="${BR}k"
+                    #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
+                    TRACK_FLAGS="-c:a:${TRACK_NUMBER} libfdk_aac -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
+                    AAC_FLAGS="${AAC_FLAGS}${TRACK_FLAGS}"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},aac,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+                else
+                    AAC_FLAGS="-c:a:${TRACK_NUMBER} copy $AAC_FLAGS"
+                    OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+                fi
+            done < <(echo "$AUDIO_TRACK_META")
+            echo "Output Audio Tracks"
+            echo "------------------"
+            echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+            echo
+            unset IFS
+            AUDIO_FLAGS="$AUDIO_FLAGS ${AAC_FLAGS:0:-1}"
+            ;;
+        *)
+            echo "Unknown codec: ${AUDIO}"
+            exit 1;;
+    esac
+
+else
+    AUDIO_FLAGS="-c:a copy"
+fi
+
+if [ $MELTON ]; then
+    if [ ! -z "${MELTON_BITRATE}" ]; then 
+        CRFMAX=25
+        VBVMAX=${MELTON_BITRATE}
+        VBVBUF=$(expr $MELTON_BITRATE \* 2)
+        QPMAX=34
+    elif [ "$INPUT_WIDTH" -gt 1280 ]; then
+        CRFMAX=25
+        VBVMAX=24000
+        VBVBUF=48000
+        QPMAX=34
+    elif [ "$INPUT_WIDTH" -gt 854 ]; then
+        CRFMAX=29
+        VBVMAX=3000
+        VBVBUF=6000
+        QPMAX=34
+    else
+        CRFMAX=33
+        VBVMAX=1500
+        VBVBUF=3000
+        QPMAX=34
+    fi
+    X265_PARAMS="crf=1:vbv-maxrate=${VBVMAX}:vbv-bufsize=${VBVBUF}:crf-max=${CRFMAX}:qpmax=${QPMAX}:log-level=error"
+else
+    X265_PARAMS="crf=${CRF}"
+fi
+
+MAPS="-map 0 -map -0:d"
+VIDEO="-c:V libx265 -pix_fmt $PIXEL_FORMAT -preset $PRESET -x265-params $X265_PARAMS"
+TRAILERS="-c:s copy -max_muxing_queue_size 9999"
+
+if [ ! -z "$TUNE" ]; then
+    VIDEO="$VIDEO -tune:V $TUNE"
+fi
+
+ENCODE_FLAGS="${MAPS} ${VIDEO} ${AUDIO_FLAGS} ${TRAILERS}"
+
+if [ ! -z "$DURATION" ]; then
+    ENCODE_FLAGS="$ENCODE_FLAGS -t $DURATION"
+fi
+
+if [ ! -z "$START" ]; then
+    FFMPEG="$FFMPEG -ss $START"
+fi
+
+if [ $SDR ]; then
+    #tonemap=tonemap=mobius:desat=0
+    #VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv${VF:+,${VF}}"
+    VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=full${VF:+,${VF}}"
+fi
+
+SCANTYPE=`$MEDIAINFO "$INPUT" | grep "Scan type " | awk -F:\  '{print $2}'`
+SCANORDER=`$MEDIAINFO "$INPUT" | grep "Scan order " | awk -F:\  '{print $2}'`
+DEINT_SUM=$(( ${YADIF:-0} + ${MCDEINT:-0} + ${NNEDI:-0} ))
+if [ $DEINT_SUM -gt 1 ]; then
+    echo "Pick one deinterlace option, not more than one."
+    exit 1
+elif [ $(( ${DEINT_SUM:-0} + ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
+    echo "Don't deinterlace and also detelecine, that's bad."
+    exit 1
+elif [ $YADIFMODE ] && [ -z "$YADIF" ]; then
+    echo "Don't set yadifmode if you're not using yadif."
+    exit 1
+elif [ $YADIF ]; then
+    YADIFMODE=${YADIFMODE:=1}
+    if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
+        if [ "$SCANORDER" = "Top Field First" ]; then
+            VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
+        else
+            VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+        fi
+    else
+        if [ $DEBUG ]; then
+            echo "Input video is not interlaced, skipping deint"
+        fi
+    fi
+elif [ $MCDEINT ]; then
+    #VF="yadif=1,mcdeint=2:1:10${VF:+,${VF}}"
+    # Some forum thread said to use yadif mode 3 so, yolo I guess
+    echo "WARNING: mcdeint has been deprecated by ffmpeg in 5.x."
+    echo "WARNING: If you want extremely slow, high-quality, frame-doubled dinterlacing in 5.x, use --nnedi."
+    if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
+        if [ "$SCANORDER" = "Top Field First" ]; then
+            VF="yadif=3:0:0,mcdeint=2:0:10${VF:+,${VF}}"
+        else
+            VF="yadif=3:1:0,mcdeint=2:1:10${VF:+,${VF}}"
+        fi
+    else
+        if [ $DEBUG ]; then
+            echo "Input video is not interlaced, skipping mcdeint"
+        fi
+    fi
+elif [ $NNEDI ]; then
+    NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
+    NN_DEINT="all"
+    FIELD="af"
+    PLANES="7"
+    NSIZE="s48x6"
+    NNS="n64"
+    QUAL="slow"
+    ETYPE="a"
+    PSCRN="new3"
+    THREADS=6
+    VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
+fi
+
+if [ $(( ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
+    echo "Can't do both kinds of detelecine at the same time, friend."
+    exit 1
+elif [ $IVTC ]; then
+    VF="pullup,dejudder${VF:+,${VF}} -r 24000/1001"
+elif [ $IVTC_FIELDMATCH ]; then
+    if [ "$SCANORDER" = "Top Field First" ]; then
+        VF="fieldmatch=order=tff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
+    else
+        VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
+    fi
+fi
+
+if [ ! -z "$VIDEOFILTER" ]; then
+    VF="$VIDEOFILTER${VF:+,${VF}}"
+fi
+
+if [ ! -z "$VF" ]; then
+    ENCODE_FLAGS="$ENCODE_FLAGS -vf $VF"
+fi
+
+if [ $DEBUG ]; then
+    echo "COMMANDS:"
+    echo "$STRIPCOVERS \"${INPUT}\""
+    echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    echo "$STRIPTAGS \"${OUTPUT}\""
+    echo "$ADDSTATS \"${OUTPUT}\""
+    #exit
+    read -p "Press y to encode, any other key to exit..." confirm
+    case $confirm in
+        [Yy] ) true;;
+        * ) exit;;
+    esac
+fi
+
+echo "## Stripping covers from input file..."
+echo "$STRIPCOVERS \"${INPUT}\""
+$STRIPCOVERS "${INPUT}"
+## Can't check status on this, if there are no covers in the file, it exits 1
+#if [ $? -eq 0 ]; then
+#    echo "## Covers stripped."
+#else
+#    echo "## error stripping covers."
+#    exit 1
+#fi
+
+echo "## Starting encode..."
+echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+nice -n 5 $FFMPEG -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
+if [ $? -eq 0 ]; then
+    echo "## encode complete."
+else
+    echo "## encoding error."
+    exit 1
+fi
+
+echo "## Stripping tags from \"${OUTPUT}\"..."
+echo "$STRIPTAGS $(printf "%q" "${OUTPUT}")"
+$STRIPTAGS "${OUTPUT}"
+if [ $? -eq 0 ]; then
+    echo "## Tags stripped from \"${OUTPUT}\""
+else
+    echo "## error stripping tags from \"${OUTPUT}\""
+    exit 1
+fi
+
+echo "## Adding stats to \"${OUTPUT}\"..."
+echo "$ADDSTATS $(printf "%q" "${OUTPUT}")"
+$ADDSTATS "${OUTPUT}" 
+if [ $? -eq 0 ]; then 
+    echo "## Stats added to \"${OUTPUT}\""
+else
+    echo "## error adding stats to \"${OUTPUT}\""
+    exit 1
+fi

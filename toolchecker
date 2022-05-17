@@ -1,0 +1,51 @@
+#!/bin/bash
+
+
+# Check for tool dependencies
+
+## External tools
+
+[ -z "$TOOLS" ] && TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq)
+
+for tool in ${TOOLS[@]}; do
+    [ "$tool" = "NONE" ] && break
+    VAR="${tool^^}"
+    if [ -z "${!VAR}" ]; then
+        declare "$VAR"=`which $tool 2>/dev/null`
+        if [ -z "${!VAR}" ]; then
+            echo "$tool not found."
+            exit 1
+        fi
+    elif [ ! -x ${!VAR} ]; then
+        echo "$tool not executable."
+        exit 1
+    fi
+    [ $DEBUG ] && echo "$VAR: ${!VAR}"
+    if [ "$tool" = "ffmpeg" ]; then
+        FFMPEG_PREFIX=`$FFMPEG -hide_banner -buildconf 2>&1 | grep prefix | awk -F= '{print $2}'`
+        [ $DEBUG ] && echo "FFMPEG_PREFIX: ${FFMPEG_PREFIX}"
+    fi
+done
+
+
+## Utility scripts from this toolkit
+
+[ -z "$SCRIPTS" ] && SCRIPTS=(cropfinder stripcovers striptags addstats)
+
+for script in ${SCRIPTS[@]}; do
+    [ "$script" = "NONE" ] && break
+    VAR="${script^^}"
+    if [ -z "${!VAR}" ]; then
+        declare "$VAR"=`realpath -e $SELF_DIR/$script 2>/dev/null`
+        if [ -z "${!VAR}" ]; then
+            echo "$script not found."
+            exit 1
+        fi
+    elif [ ! -x ${!VAR} ]; then
+        echo "$script not executable."
+        exit 1
+    fi
+    [ $DEBUG ] && echo "$VAR: ${!VAR}"
+done
+
+[ $DEBUG ] && echo

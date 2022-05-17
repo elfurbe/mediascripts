@@ -1,0 +1,91 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: $NAME -i <INPUT FILE> -o <OUTPUT FILE>
+
+-h|--help:      show this help message
+-i|--input:     file name for input
+-f|--frames:    number of frames to fetch
+-d|--debug:     print all commands and wait for keypress to continue
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+            shift
+            INPUT="${1}"
+            shift;;
+    -f|--frames)
+            shift
+            FRAMES="${1}"
+            shift;;
+    -d|--debug)
+            DEBUG=1
+            shift;;
+    -h|--help)
+            usage
+            exit;;
+    *)
+            echo "$0: invalid option ${1}"
+            echo "$0 -h for usage options"
+            usage
+            exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list, we only need these two
+TOOLS=(ffmpeg ffprobe mediainfo)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "$INPUT" ]; then
+    echo "Must supply input (-i/--input) file"
+    usage
+    exit 1
+fi
+
+if [ ! -s "$INPUT" ]; then
+    echo "Error reading input file: $INPUT"
+    exit 1
+fi
+
+if [ ! -z "$FRAMES" ]; then
+    if [ ! $FRAMES -gt 0 ]; then
+        echo "Invalid sample count. Using defaults."
+        FRAMES=50
+    fi
+else
+    FRAMES=50
+fi
+
+FRAMECOUNT=`$MEDIAINFO --Output="Video;%FrameCount%" "$INPUT"`
+RAWFRAMERATE=`$MEDIAINFO --Output="Video;%FrameRate%" "$INPUT"`
+FRAMERATE=`printf "%.${2:-0}f" $RAWFRAMERATE`
+FRAMESKIP=$(( $FRAMECOUNT / $FRAMES ))
+SPF=$(( $FRAMESKIP / $FRAMERATE ))
+FRAMEDIR=`basename "$INPUT" .mkv`
+if [ $DEBUG ]; then
+    echo "Framecount: $FRAMECOUNT"
+    echo "Framerate: $FRAMERATE"
+    echo "Frameskip: $FRAMESKIP"
+    echo "Seconds per frame: $SPF"
+    echo "Framedir: $FRAMEDIR"
+    exit
+fi
+mkdir "$FRAMEDIR"
+#echo "$FFMPEG -i \"$INPUT\" -vf select=\"not(mod(n\,$FRAMESKIP))\",setpts=N/TB -r 1 -vframes $FRAMES ${FRAMEDIR}/inputframes%03d.png"
+#$FFMPEG -i "$INPUT" -vf select="not(mod(n\,$FRAMESKIP))",setpts=N/TB -r 1 -vframes $FRAMES "${FRAMEDIR}/inputframes%03d.png"
+$FFMPEG -i "$INPUT" -vf fps=1/$SPF "${FRAMEDIR}/frame%04d.png"
