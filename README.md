@@ -10,6 +10,7 @@ My assorted media manipulation scripts
     - It's a 30 Rock joke
   - av1meup
     - A poorly maintained mod of hevcmeup2 for av1 instead of hevc
+    - Protip: AV1 is a lie concocted by big youtube to trick you into not using HEVC. Open your eyes, sheeple.
   - cropfinder
     - Tells you what ffmpeg thinks the crop should be for an input file
   - framedumper
