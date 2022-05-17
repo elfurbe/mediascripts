@@ -80,7 +80,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --square:      convert anamorphic to square pixels which make sense
 ```
 
-(seriously, if `${0##*/}` makes sense to you, honest to god you can lay your burden down and go into the west and remain <your name here>, you've done enough)
+(seriously, if `${0##*/}` makes sense to you, honest to god you can lay your burden down and go into the west and remain `<your name here>`, you've done enough)
 
 When I run it, which is literally constantly, this is my CPU time, this is typically what it looks like:
 ```bash
