@@ -265,14 +265,14 @@ fi
 if [ $AUDIO ]; then        
     NL=$'\n'
     AUDIO_TRACK_META=""
-    TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | jq -r '.media.track[] | select (."@type"=="Audio") | @base64'`
+    TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Audio") | @base64'`
     IFS=$'\n'
     for TRACK in ${TRACKS}; do
-        TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | jq -r '.StreamOrder'`
-        TRACK_CODEC=`echo "${TRACK}" | base64 --decode | jq -r '.CodecID'`
-        TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | jq -r '.BitRate'`
-        TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | jq -r '.ChannelLayout'`
-        TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | jq -r '.Channels'`
+        TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | $JQ -r '.StreamOrder'`
+        TRACK_CODEC=`echo "${TRACK}" | base64 --decode | $JQ -r '.CodecID'`
+        TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | $JQ -r '.BitRate'`
+        TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout'`
+        TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
         TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
         AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
     done
