@@ -273,6 +273,10 @@ if [ $AUDIO ]; then
         TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | $JQ -r '.BitRate'`
         TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout'`
         TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
+        if [ "$TRACK_LAYOUT" = "null" ]; then
+            TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
+            TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
+        fi
         TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
         AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
     done
@@ -309,7 +313,7 @@ if [ $AUDIO ]; then
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
                 TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
                 if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]] || [[ "${TRACK_CODEC}" =~ .*"FLAC".* ]]; then
-                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|Lt\|R\|Rt~128~g' | tr -s ' ' '+' | bc)
+                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|Lt\|R\|Rt~128~g' | tr -s ' ' '+' | bc)
                     if [ $BR -eq 0 ]; then
                         if [ $TRACK_CHANNELS -eq 8 ]; then
                             BR=704
@@ -349,7 +353,7 @@ if [ $AUDIO ]; then
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT <<< $( echo "$i" )
                 TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
                 if [[ "$TRACK_CODEC" =~ .*"PCM".* ]] || [[ "$TRACK_CODEC" =~ .*"TRUEHD".* ]] || [[ "$TRACK_CODEC" =~ .*"DTS".* ]]; then
-                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Lsr\|Rsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                     if [ $BR -eq 0 ]; then
                         BR=576
                     fi
