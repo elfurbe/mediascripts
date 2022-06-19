@@ -97,6 +97,7 @@ elif [ $# -eq 3 ]; then
         lpcm)   TRACKNAME="Opus from LPCM ${3}";;
         ac3)    TRACKNAME="Dolby AC-3 ${3}";;
         eac3)   TRACKNAME="Dolby EAC-3 ${3}";;
+        aac)    TRACKNAME="AAC ${3}";;
         *)      echo "Unrecognized original format."; exit 1;;
     esac
     IFS=""
