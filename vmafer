@@ -1,0 +1,17 @@
+#!/bin/bash
+
+NEW=$1
+ORIG=$2
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Incomplete arguments"
+    echo "usage: $0 <changed file> <reference file>"
+    exit
+fi
+
+#FRAME_RATE=`ffprobe "$ORIG" 2>&1| grep Video | awk -F", " '{print $6}' | awk '{print $1}'`
+FRAME_RATE=`ffprobe -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate "$ORIG" | bc -l`
+SUBSAMPLE=`printf "%.0f\n" "$FRAME_RATE"`
+LOG="$(basename ${NEW} .mkv).vmaf"
+
+ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="model_path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json:n_subsample=${SUBSAMPLE}:log_fmt=csv:ssim=true:psnr=true:log_path=${LOG}" -f null -
