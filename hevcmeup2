@@ -273,7 +273,7 @@ if [ $AUDIO ]; then
         TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | $JQ -r '.BitRate'`
         TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout'`
         TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
-        if [ "$TRACK_LAYOUT" = "null" ]; then
+        if [ "$TRACK_LAYOUT" = "null" ] && [ "$TRACK_CHANNELS" = "null" ]; then
             TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
             TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
         fi
