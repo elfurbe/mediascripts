@@ -14,6 +14,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --mbitrate:    if using --melton, use this bitrate cap
 --preset:      x265 preset value (default: medium)
 --tune:        x265 tune value (default: unset)
+--params:      x265 parameters string (default: unset)
 --crop:        enable crop detection (default: no)
 --debug:       output commands to be run, run nothing
 --oprofile:    output profile [1080, 720, 480]
@@ -70,6 +71,10 @@ while [ $# -gt 0 ]; do
     --tune)
             shift
             TUNE="${1}"
+            shift;;
+    --params)
+            shift
+            EXTRA_X265_PARAMS="${1}"
             shift;;
     --crop)
             CROP=1
@@ -410,6 +415,10 @@ if [ $MELTON ]; then
     X265_PARAMS="crf=1:vbv-maxrate=${VBVMAX}:vbv-bufsize=${VBVBUF}:crf-max=${CRFMAX}:qpmax=${QPMAX}:log-level=error"
 else
     X265_PARAMS="crf=${CRF}"
+fi
+
+if [ ! -z "$EXTRA_X265_PARAMS" ]; then
+    X265_PARAMS="${X265_PARAMS}:${EXTRA_X265_PARAMS}"
 fi
 
 MAPS="-map 0 -map -0:d"
