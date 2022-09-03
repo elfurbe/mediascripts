@@ -14,4 +14,8 @@ FRAME_RATE=`ffprobe -v error -select_streams v -of default=noprint_wrappers=1:no
 SUBSAMPLE=`printf "%.0f\n" "$FRAME_RATE"`
 LOG="$(basename ${NEW} .mkv).vmaf"
 
-ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="model_path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json:n_subsample=${SUBSAMPLE}:log_fmt=csv:ssim=true:psnr=true:log_path=${LOG}" -f null -
+VMAF_PARAMS="model='path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json':n_subsample=${SUBSAMPLE}:log_fmt=csv:log_path=${LOG}:feature='name=float_ssim':feature='name=float_ms_ssim':feature='name=psnr':feature='name=vif':feature='name=cambi':feature='name=ssim':feature='name=ms_ssim':feature='name=psnr':ssim=1:psnr=1:ms_ssim=1"
+
+#ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="model_path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json:n_subsample=${SUBSAMPLE}:log_fmt=csv:ssim=true:psnr=true:log_path=${LOG}" -f null -
+echo "ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
+ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
