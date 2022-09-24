@@ -199,6 +199,24 @@ case $ENCODER in
         CODEC="libaom-av1"
         DEFAULT_FLAGS="-map 0 -map -0:d -c:v $CODEC -pix_fmt $PIXEL_FORMAT -crf $CRF -b:v 0 -cpu-used $CPUUSED -tiles 2x2 -row-mt 1 -threads 6 ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
         ;;
+    svt)
+        if [ -z $CRF ]; then
+            CRF=22
+        fi
+        if [ ! -z $CPUUSED ]; then
+            echo "Cannot use --cpu-used with svt"
+            exit 1;
+        fi
+        if [ ! -z $QP ]; then
+            echo "Cannot use --qp with svt"
+            exit 1;
+        fi
+        if [ ! -z $SPEED ]; then
+            echo "Cannot use --speed with svt."
+        fi
+        CODEC="libsvtav1"
+        DEFAULT_FLAGS="-map 0 -map -0:d -c:v $CODEC -pix_fmt $PIXEL_FORMAT -preset 5 -g 240 -crf $CRF -svtav1-params tune=0 ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
+        ;;
 esac
 
 if [ ! -z "$OPROFILE" ]; then
