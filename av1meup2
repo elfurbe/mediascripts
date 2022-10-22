@@ -381,6 +381,10 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
+if [ -z ${ENCODER} ]; then
+    ENCODER=svt
+fi
+
 case "${ENCODER}" in
     aom)
         CPUUSED=5
