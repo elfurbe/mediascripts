@@ -15,5 +15,5 @@ else
 fi
 
 for FILE in "$@"; do
-    $MKVPROPEDIT "$FILE" --delete-attachment mime-type:image/jpeg
+    $MKVPROPEDIT "$FILE" --delete-attachment mime-type:image/jpeg --delete-attachment mime-type:image/png
 done
