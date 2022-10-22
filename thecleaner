@@ -129,6 +129,10 @@ elif [ $# -eq 4 ]; then
     fi
     IFS=""
     MERGEOPTIONS=(-o "${OUTPUT}"
+    --no-attachments
+    --no-track-tags
+    --no-global-tags
+    --no-buttons
     -a eng
     -s eng
     --track-name 0:\ 
@@ -145,8 +149,8 @@ if [ -f "${OUTPUT}" ]; then
     exit 1
 fi
 
-f_stripcovers "${INPUT}"
-f_striptags "${INPUT}"
+#f_stripcovers "${INPUT}"
+#f_striptags "${INPUT}"
 echo "## Merging..."
 echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
 $MKVMERGE "${MERGEOPTIONS[@]}"
