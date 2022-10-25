@@ -14,46 +14,6 @@ else
     . $SELF_DIR/toolchecker
 fi
 
-f_striptags() {
-    echo "## Stripping tags..."
-    echo "$MKVPROPEDIT $(printf "%q" "${1}") --tags all:\"\" --delete title --edit track:v1 --delete name"
-    $MKVPROPEDIT "${1}" --tags all:"" --delete title --edit track:v1 --delete name
-    if [ $? -eq 0 ]; then
-        echo "## striptags complete, tags stripped"
-    elif [ $? -eq 1 ]; then
-        echo "## striptags complete, warnings issued"
-    elif [ $? -eq 2 ]; then
-        echo "## striptags error"
-    fi
-}
-
-f_stripcovers() {
-    STRIPCOVERS=`which stripcovers`
-    echo "## Stripping covers..."
-    echo "$MKVPROPEDIT $(printf "%q" "${1}") --delete-attachment mime-type:image/jpeg"
-    $MKVPROPEDIT "${1}" --delete-attachment mime-type:image/jpeg
-    if [ $? -eq 0 ]; then
-        echo "## stripcovers complete, covers stripped"
-    elif [ $? -eq 1 ]; then
-        echo "## stripcovers complete, warnings issued"
-    elif [ $? -eq 2 ]; then
-        echo "## stripcovers error"
-    fi
-}
-
-f_addstats() {
-    echo "## Adding track statistics tags..."
-    echo "$MKVPROPEDIT --add-track-statistics-tags $(printf "%q" "${1}")"
-    $MKVPROPEDIT --add-track-statistics-tags "${1}"
-    if [ $? -eq 0 ]; then
-        echo "## Track statistics tags added"
-    elif [ $? -eq 1 ]; then
-        echo "## warnings while adding track statistics tags"
-    elif [ $? -eq 2 ]; then
-        echo "## error adding track statistics tags"
-    fi
-}
-
 if [ $# -lt 1 ]; then
     echo "Need an input file at least."
     echo "<input> [original audio format: dtsx,atmos,truehd,dtshd,flac,lpcm] [channel layout: 5.1, 7.1, etc] [path for output file]"
@@ -149,8 +109,6 @@ if [ -f "${OUTPUT}" ]; then
     exit 1
 fi
 
-#f_stripcovers "${INPUT}"
-#f_striptags "${INPUT}"
 echo "## Merging..."
 echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
 $MKVMERGE "${MERGEOPTIONS[@]}"
