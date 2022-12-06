@@ -1,0 +1,133 @@
+#!/bin/bash
+## Simple TUI for changing common track properties in mkv containers
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mkvpropedit mkvmerge jq awk sed column)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+if [ -z "$1" ]; then
+  echo "No file supplied"
+  exit
+fi
+
+truncate() {
+    echo "$@" | $AWK -v len=60 '{ if (length($0) > len) print substr($0, 1, len-3) "..."; else print; }'
+}
+
+echo
+FILE="$1"
+while true; do
+    video=0
+    audio=0
+    subtitle=0
+
+    JSON=`$MKVMERGE -F json --identify "$FILE"`
+    track_array=()
+    track_array+=("ID;SELECTOR;TYPE;CODEC;LANG;DEFAULT;FORCED;NAME")
+    track_array+=("--;--------;----;-----;----;-------;------;----")
+    while read -r line; do
+        ID=`echo "$line" | $JQ -c '.id'`
+        TYPE=`echo "$line" | $JQ -c '.type' | $SED 's/\"//g'`
+        CODEC=`echo "$line" | $JQ -c '.codec' | $SED 's/\"//g'`
+        NAME=`echo "$line" | $JQ -c '.properties.track_name' | $SED 's/\"//g'`
+        LANGUAGE=`echo "$line" | $JQ -c '.properties.language' | $SED 's/\"//g'`
+        DEFAULT=`echo "$line" | $JQ -c '.properties.default_track'`
+        FORCED=`echo "$line" | $JQ -c '.properties.forced_track'`
+        case $TYPE in
+            video) ((video=video+1));;
+            audio) ((audio=audio+1));;
+            subtitles) ((subtitles=subtitles+1));;
+        esac
+        SELECTOR="${TYPE:0:1}${!TYPE}"
+        track_array+=("${ID};${SELECTOR};${TYPE};${CODEC};${LANGUAGE};${DEFAULT};${FORCED};$(truncate $NAME)")
+    done < <(echo "$JSON" | $JQ -c '.tracks[]')
+
+    printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
+    echo
+    echo -n "Track ID to edit (q to quit): "
+    while read -r TRACK_TO_EDIT; do
+        if [ "$TRACK_TO_EDIT" == "q" ]; then
+            exit 0;
+        fi
+        TRACK_ID=$((TRACK_TO_EDIT + 2))
+        if [[ -n ${track_array[$TRACK_ID]} ]]; then
+            IFS=\; read ID SELECTOR TYPE CODEC LANGUAGE DEFAULT FORCED NAME <<<"$(echo ${track_array[$TRACK_ID]})"
+            break
+        else
+            echo "ERROR: Invalid track ID" && sleep 0.5
+            echo
+            printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
+            echo
+            echo -n "Track ID to edit (q to quit): "
+            continue 
+        fi
+    done
+    selected_track=()
+    selected_track+=("${track_array[0]}")
+    selected_track+=("${track_array[1]}")
+    selected_track+=("${track_array[$TRACK_ID]}")
+    echo
+    printf '%s\n' "${selected_track[@]}" | $COLUMN -t -s ';'
+    echo
+    echo "Options:"
+    echo "e - edit track name"
+    echo "d - flip default value"
+    echo "f - flip forced value"
+    echo "l - set language"
+    echo "b - back to track list"
+    echo "q - quit"
+    echo -n "Operation? "
+    while read -r OPERATION; do
+        case $OPERATION in
+            e)  echo -n "New track name (blank to remove): "
+                read -r TRACK_NAME
+                echo "$MKVPROPEDIT \"$FILE\" --edit track:${SELECTOR} --set \"name=$TRACK_NAME\""
+                $MKVPROPEDIT "$FILE" --edit track:${SELECTOR} --set "name=$TRACK_NAME"
+                break;;
+            d)  echo -n "Flipping value of default flag"
+                NEW_VALUE=$([[ "$DEFAULT" == "true" ]] && echo "false" || echo "true")
+                echo "$MKVPROPEDIT \"$FILE\" --edit track:${SELECTOR} --set flag-default=$NEW_VALUE"
+                $MKVPROPEDIT "$FILE" --edit track:${SELECTOR} --set flag-default=$NEW_VALUE
+                break;;
+            f)  echo -n "Flipping value of forced flag"
+                NEW_VALUE=$([[ "$FORCED" == "true" ]] && echo "false" || echo "true")
+                echo "$MKVPROPEDIT \"$FILE\" --edit track:${SELECTOR} --set flag-forced=$NEW_VALUE"
+                $MKVPROPEDIT "$FILE" --edit track:${SELECTOR} --set flag-forced=$NEW_VALUE
+                break;;
+            l)  echo -n "New track language: "
+                read -r TRACK_LANG
+                echo "$MKVPROPEDIT \"$FILE\" --edit track:${SELECTOR} --set language=$TRACK_LANG"
+                $MKVPROPEDIT "$FILE" --edit track:${SELECTOR} --set language=$TRACK_LANG
+                break;;
+            b)  echo "Returning to track list..."
+                break;;
+            q)  exit 0;;
+            *)  echo "ERROR: Unrecognized option." && sleep 0.5
+                echo
+                printf '%s\n' "${selected_track[@]}" | $COLUMN -t -s ';'
+                echo
+                echo "Options:"
+                echo "e - edit track name"
+                echo "d - flip default value"
+                echo "f - flip forced value"
+                echo "l - set language"
+                echo "x - back to track list"
+                echo -n "Operation? "
+                continue;;
+        esac
+    done
+    unset selected_track
+    unset track_array
+    unset video
+    unset audio
+    unset subtitles
+done
