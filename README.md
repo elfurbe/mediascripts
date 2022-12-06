@@ -44,6 +44,10 @@ My assorted media manipulation scripts
     - You can do this with mkvpropedit by hand like a big bad matroska gangster but I can never remember the damn syntax
     - It only works on mkv files, natch.
     - I did my very best to take whatever text you type and stuff it into the metadata tag but if you try to paste some emoji nonsense in here it's probably not gonna work and I do not give a single shit.
+  - propedit
+    - This is the evolution of tracktitleeditor
+    - I hate mkvpropedit syntax so much, I never want to remember it again, so this tool does the things I need to do most often in a TUI manner
+    - It only works on mkv files, natch.
   - vmafer
     - I wanted to be able to run [vmaf](https://github.com/Netflix/vmaf) comparisons for "am I doing this right" reasons, but remembering and typing the command was super tedious. This script is barely a script. Using the original file frame rate, it sets the frame subsample size to one second of frames. It takes two positional arguments, first is the new file, second is the original file. Is that backward, who knows, who cares, I am the one who scripts.
 
