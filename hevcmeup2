@@ -28,8 +28,9 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --pullup:      Alias for --ivtc
 --fieldmatch:  Inverse telecine a different way using fieldmatch filter
 --bitdepth:    Bitdepth for pixel format (8, 10 or 12, default: 10)
---audio:       transcode audio tracks to selected codec [flac, opus, aac]
+--audio:       transcode lossless audio tracks to selected codec [flac, opus, aac]
 --square:      convert anamorphic to square pixels which make sense
+--forcelossy:  transcode all audio tracks to selected codec
 
 EOF
 }
@@ -115,6 +116,9 @@ while [ $# -gt 0 ]; do
     --audio)
             shift
             AUDIO="${1}"
+            shift;;
+    --forcelossy)
+            FORCE_LOSSY=1
             shift;;
     --bitdepth)
             shift
@@ -300,7 +304,7 @@ if [ $AUDIO ]; then
         flac)
             while read -r i; do
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
-                if [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]] && [[ "$TRACK_FORMAT" != "FLAC" ]]; then
+                if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]] && [[ "$TRACK_FORMAT" != "FLAC" ]]; then
                     FLAC_FLAGS="-c:a:${TRACK_NUMBER} flac $FLAC_FLAGS"
                     OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},flac,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
                 else
@@ -318,7 +322,7 @@ if [ $AUDIO ]; then
             while read -r i; do
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
                 TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
-                if [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
+                if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                     BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|Cs\|L\|Lt\|R\|Rt~128~g' | tr -s ' ' '+' | bc)
                     if [ $BR -eq 0 ]; then
                         if [ $TRACK_CHANNELS -eq 8 ]; then
@@ -358,7 +362,7 @@ if [ $AUDIO ]; then
             while read -r i; do
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
                 TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
-                if [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
+                if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                     BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Lsr\|Rsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                     if [ $BR -eq 0 ]; then
                         BR=576
