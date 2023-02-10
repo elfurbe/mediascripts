@@ -243,29 +243,21 @@ if [ $CROP ]; then
     SEGMENTS=10
     CFOUTPUT=$($CROPFINDER -i "$INPUT" -s $SEGMENTS -d)
 
-    if [ $DEBUG ]; then
-        echo "$CFOUTPUT"
-    fi
+    [ $DEBUG ] && echo "$CFOUTPUT"
     CROP=$(echo "$CFOUTPUT" | tail -n1)
     IFS=':' read width height left top <<< "$(echo "$CROP" | awk -F= '{print $2}')"
     if [ $width -ne $INPUT_WIDTH ]; then
-        if [ $DEBUG ]; then
-            echo "Horizontal crop detected, checking for balance"
-        fi
+        [ $DEBUG ] && echo "Horizontal crop detected, checking for balance"
         if [ $(( $width + 2 * $left )) -ne $INPUT_WIDTH ]; then
             GUTTER_WIDTH=$(( ($INPUT_WIDTH - $width) / 2 ))
             PAD="pad=$INPUT_WIDTH:$height:$GUTTER_WIDTH:0"
             CROP="$CROP,$PAD"
-            if [ $DEBUG ]; then
-                echo "Unbalanced horizontal crop detected, evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTER_WIDTH)"
-                echo $CROP
-            fi
+            [ $DEBUG ] && echo "Unbalanced horizontal crop detected, evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTER_WIDTH)"
+            [ $DEBUG ] && echo $CROP
         else
             CROP="crop=$INPUT_WIDTH:$height:0:$top"
-            if [ $DEBUG ]; then
-                echo "Balanced horizontal crop detected, using input width ($INPUT_WIDTH) instead"
-                echo $CROP
-            fi
+            [ $DEBUG ] && echo "Balanced horizontal crop detected, using input width ($INPUT_WIDTH) instead"
+            [ $DEBUG ] && echo $CROP
         fi
     fi
     VF="${CROP}${VF:+,${VF}}"
@@ -480,9 +472,7 @@ elif [ $YADIF ]; then
             VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
         fi
     else
-        if [ $DEBUG ]; then
-            echo "Input video is not interlaced, skipping deint"
-        fi
+        [ $DEBUG ] && echo "Input video is not interlaced, skipping deint"
     fi
 elif [ $MCDEINT ]; then
     #VF="yadif=1,mcdeint=2:1:10${VF:+,${VF}}"
@@ -496,9 +486,7 @@ elif [ $MCDEINT ]; then
             VF="yadif=3:1:0,mcdeint=2:1:10${VF:+,${VF}}"
         fi
     else
-        if [ $DEBUG ]; then
-            echo "Input video is not interlaced, skipping mcdeint"
-        fi
+        [ $DEBUG ] && echo "Input video is not interlaced, skipping mcdeint"
     fi
 elif [ $NNEDI ]; then
     NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
