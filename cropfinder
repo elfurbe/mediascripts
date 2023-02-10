@@ -80,23 +80,17 @@ else
 fi
 
 DUR=`$FFPROBE "$INPUT" 2>&1 | grep -e DURATION -e Duration | head -n1 | awk -F': ' '{print $2}' | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | awk -F. '{print $1}'`
-if [ $DEBUG ]; then
-    echo "Duration: $DUR"
-fi
+[ $DEBUG ] && echo "Duration: $DUR"
 DUR_TRIM=$((DUR - 600))
 SPLIT=$(($DUR_TRIM / $SAMPLES))
-if [ $DEBUG ]; then
-    echo "Sample length: $SPLIT"
-fi
+[ $DEBUG ] && echo "Sample length: $SPLIT"
 #CROPDETECT="cropdetect=24:16:0"
 CROPDETECT="cropdetect=.1:16:0"
 ALL_CROPS=""
 for i in `seq 1 $SAMPLES`; do
     START=$(($SPLIT * ${i}))
     CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 |  grep -o crop=.* | sort | uniq -c | sort -n | tail -n1 | awk '{print $2}')
-    if [ $DEBUG ]; then
-        echo -e "Segment start: $START\t$CROP"
-    fi
+    [ $DEBUG ] && echo -e "Segment start: $START\t$CROP"
     ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
 done
 CROP=`echo "$ALL_CROPS" | sort -t "=" -k 2 | uniq -c | sort -n | tail -n1 | awk '{print $2}'`
