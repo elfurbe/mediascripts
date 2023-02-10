@@ -239,10 +239,7 @@ case "${BITDEPTH}" in
 esac
 
 if [ $CROP ]; then
-    if [ ! -x $CROPFINDER ]; then
-        exit 1
-    fi
-
+    echo "Finding crop..."
     SEGMENTS=10
     CFOUTPUT=$($CROPFINDER -i "$INPUT" -s $SEGMENTS -d)
 
