@@ -5,7 +5,7 @@
 
 ## External tools
 
-[ -z "$TOOLS" ] && TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq)
+[ -z "$TOOLS" ] && TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq bc)
 
 for tool in ${TOOLS[@]}; do
     [ "$tool" = "NONE" ] && break
