@@ -493,12 +493,12 @@ elif [ $NNEDI ]; then
     NN_DEINT="all"
     FIELD="af"
     PLANES="7"
-    NSIZE="s48x6"
-    NNS="n64"
+    NSIZE="s32x6"
+    NNS="n32"
     QUAL="slow"
     ETYPE="a"
     PSCRN="new3"
-    THREADS=6
+    THREADS=18
     VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
 fi
 
