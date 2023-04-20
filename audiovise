@@ -147,7 +147,7 @@ case "${AUDIO}" in
                 fi
                 TRACK_BITRATE="${BR}k"
                 #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
-                TRACK_FLAGS="-c:a:${TRACK_NUMBER} libopus -filter:a:0 aformat=channel_layouts='7.1|5.1|stereo|mono' -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
+                TRACK_FLAGS="-codec:a:${TRACK_NUMBER} libopus -filter:a:${TRACK_NUMBER} aformat=channel_layouts='7.1|5.1|stereo|mono' -b:a:${TRACK_NUMBER} ${TRACK_BITRATE} "
                 OPUS_FLAGS="${OPUS_FLAGS}${TRACK_FLAGS}"
                 OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},opus,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
             else
@@ -198,6 +198,7 @@ if [ $AUDIOONLY ]; then
 else
     DEFAULT_FLAGS="-map 0 -map -0:d -c:v copy ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
 fi
+
 
 if [ $DEBUG ]; then
     echo "COMMANDS:"
