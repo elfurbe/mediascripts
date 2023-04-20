@@ -316,7 +316,7 @@ if [ $AUDIO ]; then
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
                 TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | ${BC}`
                 if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
-                    BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
+                    BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                     if [ $BR -eq 0 ]; then
                         if [ $TRACK_CHANNELS -eq 8 ]; then
                             BR=704
