@@ -1,0 +1,70 @@
+#!/bin/bash
+
+## This is because I am lazy and I cannot ever remember all the flags to make ffmpeg shut the fuck up and opusenc read from stdin
+## It can only do one track, so if you have more than one you have to tell it which one to do
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(ffmpeg opusenc jq base64 bc sed mediainfo base64)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "$1" ]; then
+    echo "No input provided."
+    echo "${0} input output [track num]"
+    exit 1
+fi
+if [ -z "$2" ]; then
+    echo "No output provided."
+    echo "${0} input_file output_file [track num]"
+    exit 1
+fi
+INPUT="$1"
+OUTPUT="$2"
+
+if [ -z "$3" ]; then
+    TRACKNUM=0
+else
+    if [ "$3" -eq "$3" ]; then
+        TRACKNUM=$3
+        MITRACKNUM=`echo $3 + 1 | bc`
+    else
+        echo "Track number should be a number"
+        exit 1
+    fi
+fi
+
+NL=$'\n'
+TRACK=`$MEDIAINFO --output=JSON "$INPUT" | jq -r ".media.track[${MITRACKNUM}] | @base64"`
+TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | jq -r '.StreamOrder'`
+TRACK_CODEC=`echo "${TRACK}" | base64 --decode | jq -r '.CodecID'`
+TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | jq -r '.BitRate'`
+TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | jq -r '.ChannelLayout'`
+TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | jq -r '.Channels'`
+TRACK_COMPMODE=`echo "${TRACK}" | base64 --decode | $JQ -r '.Compression_Mode'`
+TRACK_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format'`
+TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
+echo
+echo "Input Audio Track"
+echo "------------------"
+echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${TRACK_META}" | column -t -s, -o " | "
+echo
+
+BR=$(echo "$TRACK_LAYOUT" | $SED -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' -e 's~\ ~\+~g' | $BC)
+OUTPUT_TRACK_META="opus,${BR}k,${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
+echo
+echo "Output Audio Track"
+echo "------------------"
+echo "Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
+echo
+
+echo $FFMPEG -hide_banner -loglevel error -i "${INPUT}" -map 0:${TRACKNUM} -map_metadata -1 -map_chapters -1 -f wav - \| $OPUSENC --bitrate ${BR}k - "${OUTPUT}"
+$FFMPEG -hide_banner -loglevel error -i "${INPUT}" -map 0:${TRACKNUM} -map_metadata -1 -map_chapters -1 -f wav - | $OPUSENC --bitrate ${BR}k - "${OUTPUT}"
