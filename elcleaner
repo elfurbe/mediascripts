@@ -1,0 +1,215 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
+
+-h|--help:          show this help message
+-i|--input:         file name for input
+-o|--output:        file name for output
+-d|--directory:     directory for output file (default: .)
+-a|--aformat:       audio format of main original track (used for track title, e.g. "dtshd")
+-c|--cformat:       channel format/layout of main original track (used for track title, e.g. "5.1")
+-al|--alangs:       audio languages to keep (valid ISO 639 language codes, comma separated, default: eng)
+-sl|--slangs:       subtitle languages to keep (valid ISO 639 language codes, comma separated, default: eng)
+-at|--atracks:      comma separated list of audio track numbers to keep
+-st|--stracks:      comma separated list of subtitle track numbers to keep
+-sc|--stripcompat:  strip ac3 compatibility tracks if found
+-fo|--firstonly:    only keep the first audio track
+--debug:            print debugging information
+
+EOF
+}
+
+truncate() {
+    echo "$@" | $AWK -v len=60 '{ if (length($0) > len) print substr($0, 1, len-3) "..."; else print; }'
+}
+
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mkvmerge mkvpropedit jq sed awk column)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+        shift
+        INPUT="${1}"
+        shift;;
+    -o|--output)
+        shift
+        OUTPUT="${1}"
+        shift;;
+    -d|--directory)
+        shift
+        OUTPUT_DIR="${1}"
+        shift;;
+    -al|--alangs|-at|--atracks)
+        shift
+        AUDIO_TRACKS="${1}"
+        shift;;
+    -sl|--slangs|-st|--stracks)
+        shift
+        SUBTITLE_TRACKS="${1}"
+        shift;;
+    -a|--aformat)
+        shift
+        AFORMAT="${1}"
+        shift;;
+    -c|--cformat)
+        shift
+        CFORMAT="${1}"
+        shift;;
+    -sc|--stripcompat)
+        STRIPCOMPAT=1
+        shift;;
+    -fo|--firstonly)
+        FIRSTONLY=1
+        shift;;
+    --debug)
+        DEBUG=1
+        shift;;
+    -h|--help)
+        usage
+        exit;;
+    *)
+        echo "$0: invalid option ${1}"
+        echo "$0 -h for usage options"
+        usage
+        exit 1;;
+    esac
+done
+
+if [ -z "$INPUT" ]; then
+    echo "No input file provided."
+    usage
+    exit 1
+fi
+
+if [ -z "$AFORMAT" ]; then
+    echo "Not updating primary audio track title."
+fi
+
+if [ -z "$OUTPUT_DIR" ] && [ -n "$OUTPUT" ]; then
+    OUTPUT="${OUTPUT}"
+elif [ -n "$OUTPUT_DIR" ] && [ -z "$OUTPUT" ]; then
+    OUTPUT_FILE=$(basename "${INPUT}")
+    OUTPUT="${OUTPUT_DIR%/}/${OUTPUT_FILE}"
+elif [ -n "$OUTPUT_DIR" ] && [ -n "$OUTPUT" ]; then
+    OUTPUT="${OUTPUT_DIR%/}/${OUTPUT}"
+elif [ -z "$OUTPUT_DIR" ] && [ -z "$OUTPUT" ]; then
+    OUTPUT="${INPUT:0: -4}_1.mkv"
+fi
+
+if [ -z "$AUDIO_TRACKS" ]; then
+    AUDIO_TRACKS="eng"
+fi
+
+if [ $FIRSTONLY ]; then
+    AUDIO_TRACKS="1"
+fi
+
+if [ -z "$SUBTITLE_TRACKS" ]; then
+    SUBTITLE_TRACKS="eng"
+fi
+
+if [ $DEBUG ]; then
+    echo "INPUT: ${INPUT}"
+    echo "OUTPUT: ${OUTPUT}"
+    echo "OUTPUT_DIR: ${OUTPUT_DIR}"
+    echo "AFORMAT: ${AFORMAT}"
+    echo "CFORMAT: ${CFORMAT}"
+    echo "AUDIO_TRACKS: ${AUDIO_TRACKS}"
+    echo "SUBTITLE_TRACKS: ${SUBTITLE_TRACKS}"
+
+    JSON=`$MKVMERGE -F json --identify "$INPUT"`
+    track_array=()
+    track_array+=("ID;SELECTOR;TYPE;CODEC;LANG;DEFAULT;FORCED;NAME")
+    track_array+=("--;--------;----;-----;----;-------;------;----")
+    while read -r line; do
+        ID=`echo "$line" | $JQ -c '.id'`
+        TYPE=`echo "$line" | $JQ -c '.type' | $SED 's/\"//g'`
+        CODEC=`echo "$line" | $JQ -c '.codec' | $SED 's/\"//g'`
+        NAME=`echo "$line" | $JQ -c '.properties.track_name' | $SED 's/\"//g'`
+        LANGUAGE=`echo "$line" | $JQ -c '.properties.language' | $SED 's/\"//g'`
+        DEFAULT=`echo "$line" | $JQ -c '.properties.default_track'`
+        FORCED=`echo "$line" | $JQ -c '.properties.forced_track'`
+        SELECTOR="${TYPE:0:1}${!TYPE}"
+        track_array+=("${ID};${SELECTOR};${TYPE};${CODEC};${LANGUAGE};${DEFAULT};${FORCED};$(truncate $NAME)")
+    done < <(echo "$JSON" | $JQ -c '.tracks[]')
+fi
+
+case "$AFORMAT" in
+    dtsx)   TRACKNAME="DTS-X MA"; [ -n "$CFORMAT" ] && echo "No channel format with object-based codecs, ignoring";;
+    atmos)  TRACKNAME="Dolby TrueHD Atmos"; [ -n "$CFORMAT" ] && echo "No channel format with object-based codecs, ignoring";;
+    truehd) [ -n "$CFORMAT" ] && TRACKNAME="Opus from TrueHD ${CFORMAT}" || NOCFORMAT=1;;
+    dtshd)  [ -n "$CFORMAT" ] && TRACKNAME="Opus from DTS-HD MA ${CFORMAT}" || NOCFORMAT=1;;
+    dtshra) [ -n "$CFORMAT" ] && TRACKNAME="Opus from DTS-HD HRA ${CFORMAT}" || NOCFORMAT=1;;
+    flac)   [ -n "$CFORMAT" ] && TRACKNAME="Opus from FLAC ${CFORMAT}" || NOCFORMAT=1;;
+    lpcm)   [ -n "$CFORMAT" ] && TRACKNAME="Opus from LPCM ${CFORMAT}" || NOCFORMAT=1;;
+    ac3)    [ -n "$CFORMAT" ] && TRACKNAME="Dolby AC-3 ${CFORMAT}" || NOCFORMAT=1;;
+    eac3)   [ -n "$CFORMAT" ] && TRACKNAME="Dolby EAC-3 ${CFORMAT}" || NOCFORMAT=1;;
+    aac)    [ -n "$CFORMAT" ] && TRACKNAME="AAC ${CFORMAT}" || NOCFORMAT=1;;
+    dts)    [ -n "$CFORMAT" ] && TRACKNAME="DTS ${CFORMAT}" || NOCFORMAT=1;;
+    *)      echo "Unrecognized format shorthand, using text as entered, with channel format, if provided"; [ -n "$CFORMAT" ] && TRACKNAME="${AFORMAT} ${CFORMAT}" || TRACKNAME="${AFORMAT}";;
+esac
+
+if [ $NOCFORMAT ]; then
+    echo "Must provide channel format for audio format ${AFORMAT}"
+    exit 1
+fi
+
+printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
+
+IFS=""
+MERGEOPTIONS=(-o "${OUTPUT}"
+--no-attachments
+--no-track-tags
+--no-global-tags
+--no-buttons
+-a ${AUDIO_TRACKS}
+-s ${SUBTITLE_TRACKS}
+--track-name 0:\ 
+--track-name 1:"${TRACKNAME}"
+"${INPUT}")
+unset IFS
+
+echo "## Merging..."
+echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+$MKVMERGE "${MERGEOPTIONS[@]}"
+
+if [ $? -eq 0 ]; then
+    echo "## Merge complete."
+else
+    echo "## merge error"
+    exit 1
+fi
+
+if [ $STRIPCOMPAT ]; then
+    OUTPUT2="${OUTPUT:0: -4}_2.mkv"
+    MERGEOPTIONS=(-o "${OUTPUT2}"
+    -a !2
+    "${OUTPUT}")
+    echo "## Second merge to strip compatibility track"
+    echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+    $MKVMERGE "${MERGEOPTIONS[@]}"
+    rm "${OUTPUT}"
+    mv "${OUTPUT2}" "${OUTPUT}"
+    if [ $? -eq 0 ]; then
+        echo "## Merge complete."
+    else
+        echo "## merge error"
+        exit 1
+    fi
+fi
