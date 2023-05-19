@@ -318,21 +318,15 @@ if [ $AUDIO ]; then
                 if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                     BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                     if [ $BR -eq 0 ]; then
-                        if [ $TRACK_CHANNELS -eq 8 ]; then
-                            BR=704
-                        elif [ $TRACK_CHANNELS -eq 7 ]; then
-                            BR=704
-                        elif [ $TRACK_CHANNELS -eq 6 ]; then
-                            BR=576
-                        elif [ $TRACK_CHANNELS -eq 5 ]; then
-                            BR=576
-                        elif [ $TRACK_CHANNELS -eq 2 ]; then
-                            BR=256
-                        elif [ $TRACK_CHANNELS -eq 1 ]; then
-                            BR=128
-                        else
-                            BR=576
-                        fi
+                        case $TRACK_CHANNELS in
+                            8|7) BR=704;;
+                            6|5) BR=576;;
+                            4) BR=512;;
+                            3) BR=384;;
+                            2) BR=256;;
+                            1) BR=128;;
+                            *) BR=576;;
+                        esac
                     fi
                     TRACK_BITRATE="${BR}k"
                     #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
@@ -358,7 +352,15 @@ if [ $AUDIO ]; then
                 if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                     BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Lsr\|Rsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | ${TR} -s ' ' '+' | ${BC})
                     if [ $BR -eq 0 ]; then
-                        BR=576
+                        case $TRACK_CHANNELS in
+                            8|7) BR=704;;
+                            6|5) BR=576;;
+                            4) BR=512;;
+                            3) BR=384;;
+                            2) BR=256;;
+                            1) BR=128;;
+                            *) BR=576;;
+                        esac
                     fi
                     TRACK_BITRATE="${BR}k"
                     #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "

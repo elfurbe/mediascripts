@@ -143,7 +143,15 @@ case "${AUDIO}" in
             if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                 BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                 if [ $BR -eq 0 ]; then
-                    BR=576
+                    case $TRACK_CHANNELS in
+                        8|7) BR=704;;
+                        6|5) BR=576;;
+                        4) BR=512;;
+                        3) BR=384;;
+                        2) BR=256;;
+                        1) BR=128;;
+                        *) BR=576;;
+                    esac
                 fi
                 TRACK_BITRATE="${BR}k"
                 #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
@@ -169,7 +177,15 @@ case "${AUDIO}" in
             if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
                 BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                 if [ $BR -eq 0 ]; then
-                    BR=576
+                    case $TRACK_CHANNELS in
+                        8|7) BR=704;;
+                        6|5) BR=576;;
+                        4) BR=512;;
+                        3) BR=384;;
+                        2) BR=256;;
+                        1) BR=128;;
+                        *) BR=576;;
+                    esac
                 fi
                 TRACK_BITRATE="${BR}k"
                 #TRACK_FLAGS="-ab:${TRACK_NUMBER} ${TRACK_BITRATE} -metadata:${TRACK_NUMBER} title=\"Opus from ${TRACK_CODEC}\" "
