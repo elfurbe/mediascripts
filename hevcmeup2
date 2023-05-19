@@ -20,13 +20,8 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --oprofile:    output profile [1080, 720, 480]
 --vf:          custom videofilter input
 --sdr:         best effort 2020->709 color fix
---yadif:       deinterlace with yadif 
---yadifmode:   set yadif to specific mode (default: 1, send frame per field)
---mcdeint:     deinterlace with yadif and mcdeint (DEPRECATED)
---nnedi:       use the power of ai to deinterlace
---ivtc:        Inverse telecine, aka pullup (assumes NTSC DVD 29.97->23.976)
---pullup:      Alias for --ivtc
---fieldmatch:  Inverse telecine a different way using fieldmatch filter
+--deint:       deinterlace with specified method [nnedi (default), yadif]
+--ivtc:        Perform detelecine via specified method [ivtc (default), fieldmatch]
 --bitdepth:    Bitdepth for pixel format (8, 10 or 12, default: 10)
 --audio:       transcode lossless audio tracks to selected codec [flac, opus, aac]
 --square:      convert anamorphic to square pixels which make sense
@@ -95,24 +90,22 @@ while [ $# -gt 0 ]; do
     --sdr)
             SDR=1
             shift;;
-    --yadif)
-            YADIF=1
+    --deint)
+            if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
+                DEINT="nnedi"
+            else
+                shift
+                DEINT="${1}"
+            fi
             shift;;
-    --yadifmode)
-            shift
-            YADIFMODE="${1}"
-            shift;;
-    --mcdeint)
-            MCDEINT=1
-            shift;;
-    --nnedi)
-            NNEDI=1
-            shift;;
-    --ivtc|--pullup)
-            IVTC=1
-            shift;;
-    --fieldmatch)
-            IVTC_FIELDMATCH=1
+    --ivtc)
+            echo "IVTC"
+            if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
+                IVTC="ivtc"
+            else
+                shift
+                IVTC="${1}"
+            fi
             shift;;
     --audio)
             shift
@@ -453,68 +446,70 @@ if [ $SDR ]; then
     VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=full${VF:+,${VF}}"
 fi
 
-SCANTYPE=`$MEDIAINFO "$INPUT" | ${GREP} "Scan type " | ${AWK} -F:\  '{print $2}'`
-SCANORDER=`$MEDIAINFO "$INPUT" | ${GREP} "Scan order " | ${AWK} -F:\  '{print $2}'`
-DEINT_SUM=$(( ${YADIF:-0} + ${MCDEINT:-0} + ${NNEDI:-0} ))
-if [ $DEINT_SUM -gt 1 ]; then
-    echo "Pick one deinterlace option, not more than one."
-    exit 1
-elif [ $(( ${DEINT_SUM:-0} + ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
+if [ -n "${DEINT}" ] && [ -n "${IVTC}" ]; then
     echo "Don't deinterlace and also detelecine, that's bad."
     exit 1
-elif [ $YADIFMODE ] && [ -z "$YADIF" ]; then
-    echo "Don't set yadifmode if you're not using yadif."
-    exit 1
-elif [ $YADIF ]; then
-    YADIFMODE=${YADIFMODE:=1}
-    if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
-        if [ "$SCANORDER" = "Top Field First" ]; then
-            VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
-        else
-            VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
-        fi
-    else
-        [ $DEBUG ] && echo "Input video is not interlaced, skipping deint"
-    fi
-elif [ $MCDEINT ]; then
-    #VF="yadif=1,mcdeint=2:1:10${VF:+,${VF}}"
-    # Some forum thread said to use yadif mode 3 so, yolo I guess
-    echo "WARNING: mcdeint has been deprecated by ffmpeg in 5.x."
-    echo "WARNING: If you want extremely slow, high-quality, frame-doubled dinterlacing in 5.x, use --nnedi."
-    if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
-        if [ "$SCANORDER" = "Top Field First" ]; then
-            VF="yadif=3:0:0,mcdeint=2:0:10${VF:+,${VF}}"
-        else
-            VF="yadif=3:1:0,mcdeint=2:1:10${VF:+,${VF}}"
-        fi
-    else
-        [ $DEBUG ] && echo "Input video is not interlaced, skipping mcdeint"
-    fi
-elif [ $NNEDI ]; then
-    NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
-    NN_DEINT="all"
-    FIELD="af"
-    PLANES="7"
-    NSIZE="s32x6"
-    NNS="n32"
-    QUAL="slow"
-    ETYPE="a"
-    PSCRN="new3"
-    THREADS=18
-    VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
 fi
 
-if [ $(( ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
-    echo "Can't do both kinds of detelecine at the same time, friend."
-    exit 1
-elif [ $IVTC ]; then
-    VF="pullup,dejudder${VF:+,${VF}} -r 24000/1001"
-elif [ $IVTC_FIELDMATCH ]; then
-    if [ "$SCANORDER" = "Top Field First" ]; then
-        VF="fieldmatch=order=tff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
-    else
-        VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
-    fi
+## DEINTERLACING SHENANIGANS
+SCANTYPE=`$MEDIAINFO "$INPUT" | ${GREP} "Scan type " | ${AWK} -F:\  '{print $2}'`
+SCANORDER=`$MEDIAINFO "$INPUT" | ${GREP} "Scan order " | ${AWK} -F:\  '{print $2}'`
+if [ -n "${DEINT}" ]; then
+    case ${DEINT} in
+        nnedi)
+            NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
+            NN_DEINT="all"
+            FIELD="af"
+            PLANES="7"
+            NSIZE="s32x6"
+            NNS="n32"
+            QUAL="slow"
+            ETYPE="a"
+            PSCRN="new3"
+            THREADS=18
+            VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}";;
+        yadif*) 
+            MODE=$(echo $DEINT | awk -F, '{print $2}')
+            YADIFMODE=${MODE:=1}
+            if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
+                if [ "$SCANORDER" = "Top Field First" ]; then
+                    VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
+                else
+                    VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+                fi
+            else
+                [ $DEBUG ] && echo "Input video is not interlaced, skipping deint"
+            fi;;
+        mcdeint)
+            #echo "WARNING: mcdeint has been deprecated by ffmpeg in 5.x."
+            #echo "WARNING: If you want extremely slow, high-quality, frame-doubled dinterlacing in 5.x, use --nnedi."
+            #if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
+            #    if [ "$SCANORDER" = "Top Field First" ]; then
+            #        VF="yadif=3:0:0,mcdeint=2:0:10${VF:+,${VF}}"
+            #    else
+            #        VF="yadif=3:1:0,mcdeint=2:1:10${VF:+,${VF}}"
+            #    fi
+            #else
+            #    [ $DEBUG ] && echo "Input video is not interlaced, skipping mcdeint"
+            #fi
+            echo "Method mcdeint is deprecated, exiting."; exit 1;;
+        false) ;;
+        *) echo "Unrecognized deinterlace method '${DEINT}', exiting."; exit 1;;
+    esac
+fi
+## DETELECINE SHENANIGANS
+if [ -n "${IVTC}" ]; then
+    case ${IVTC-"false"} in
+        ivtc|pulldown)
+            VF="pullup,dejudder${VF:+,${VF}} -r 24000/1001";;
+        fieldmatch)
+            if [ "$SCANORDER" = "Top Field First" ]; then
+                VF="fieldmatch=order=tff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
+            else
+                VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
+            fi;;
+        *) echo "unrecognized ivtc method '${IVTC}'. exiting."; exit 1;;
+    esac
 fi
 
 if [ ! -z "$VIDEOFILTER" ]; then
