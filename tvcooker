@@ -1,0 +1,188 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: ${0##*/} --vsource <video source> --directory <output directory [--resolution <video resolution>] [--aformat <codec>] [--cformat <channel format>] [--debug]
+
+-h|--help:          show this help message
+-d|--directory:     directory for output files 
+-v|--vsource:       video source (bluray, webdl, hdtv, dvd, etc)
+-r|--resolution:    video source resolution height (1080, 720, 480, etc. Will guess if not provided)
+-a|--aformat:       audio format of main track (eac3, opus, aac, etc. Will attempt detection if not provided)
+-c|--cformat:       channel format/layout of main track (2.0, 5.1, etc. Will guess if not provided)
+--opus:             also transcode audio to opus
+--crf:              specify crf (default: 20}
+--crop:             enable cropping
+--animation:        enable tune for animation
+--deint:            enable deinterlacing [ nnedi (default), yadif ]
+--debug:            print debugging information
+
+EOF
+}
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mediainfo jq sed tr base64 ts basename)
+# Does not depend on any other scripts
+SCRIPTS=(hevcmeup2)
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -d|--directory)
+        shift
+        DIRECTORY="${1%/}"
+        shift;;
+    -a|--aformat)
+        shift
+        AFORMAT="${1}"
+        shift;;
+    -c|--cformat)
+        shift
+        CFORMAT="${1}"
+        shift;;
+    -v|--vsource)
+        shift
+        VSOURCE="${1}"
+        shift;;
+    -r|--resolution)
+        shift
+        RESOLUTION="${1}"
+        shift;;
+    --crf)
+        shift
+        CRF="${1}"
+        shift;;
+    --opus)
+        OPUS=true
+        shift;;
+    --animation)
+        ANIMATION=true
+        shift;;
+    --crop)
+        CROP=true
+        shift;;
+    --deint)
+            if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
+                DEINT="nnedi"
+            else
+                shift
+                DEINT="${1}"
+            fi
+            shift;;
+    --ivtc)
+            echo "IVTC"
+            if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
+                IVTC="ivtc"
+            else
+                shift
+                IVTC="${1}"
+            fi
+            shift;;
+    --debug)
+        DEBUG=true
+        shift;;
+    -h|--help)
+        usage
+        exit;;
+    *)
+        echo "$0: invalid option ${1}"
+        echo "$0 -h for usage options"
+        usage
+        exit 1;;
+    esac
+done
+
+if ${VSOURCE+false}; then
+    echo "Video source not provided"
+    usage
+    exit 1
+fi
+
+if ${DIRECTORY+false}; then
+    echo "Output directory not provided"
+    usage
+    exit 1
+fi
+
+if ${CRF+false}; then
+    CRF=20
+fi
+
+OLD_IFS="${IFS}"
+IFS=$'\n'
+for FILE in *; do
+    [ $DEBUG ] && echo
+    [ $DEBUG ] && echo -e "FILE:\t\t${FILE}"
+    if [ "$($BASENAME "$FILE" .mkv)" == "$FILE" ] && [ "$($BASENAME "$FILE" .mp4)" == "$FILE" ]; then
+        echo "unknown file extension"
+        exit 1
+    fi
+    [ $DEBUG ] && echo -e "VSOURCE:\t$VSOURCE"
+    [ $DEBUG ] && echo -e "DIRECTORY:\t$DIRECTORY"
+
+    MI=$($MEDIAINFO --output=JSON "$FILE" | $BASE64)
+    if ${RESOLUTION+false}; then
+        WIDTH=`echo "${MI}" | $BASE64 --decode | $JQ -r '.media.track[] | select (."@type"=="Video").Width'`
+        if [ $WIDTH -gt 1280 ]; then
+            D_RESOLUTION="1080p"
+        else
+            D_RESOLUTION="720p"
+        fi
+    else
+        D_RESOLUTION="${RESOLUTION}"
+    fi
+    [ $DEBUG ] && echo -e "RESOLUTION:\t$D_RESOLUTION"
+
+    if [ $AFORMAT ]; then
+        D_AFORMAT="${AFORMAT}"
+    elif [ $OPUS ]; then
+        D_AFORMAT="opus"
+    else
+        D_AFORMAT=`echo "${MI}" | $BASE64 --decode | $JQ -r 'first(.media.track[] | select (."@type"=="Audio")).Format' | $SED -e 's/\ //g' -e 's/-//g' | $TR '[:upper:]' '[:lower:]'`
+    fi
+    [ $DEBUG ] && echo -e "AFORMAT:\t$D_AFORMAT"
+
+    if ${CFORMAT+false}; then
+        CHANNELS=`echo "${MI}" | $BASE64 --decode | $JQ -r 'first(.media.track[] | select (."@type"=="Audio")).Channels'`
+        case $CHANNELS in
+            6) D_CFORMAT="5.1";;
+            2) D_CFORMAT="2.0";;
+        esac
+    else
+        D_CFORMAT="${CFORMAT}"
+    fi
+    [ $DEBUG ] && echo -e "CFORMAT:\t$D_CFORMAT"
+
+    NEW=$(echo "$FILE" | $SED -e 's/\ -\ /./g' -e 's/\ /./g' -e "s/'//g" -e 's/,//g' -e 's/!//g' -e 's/?//g' -e 's/(\|)//g' -e 's/\([0-9]\{1,\}\)x\([0-9][0-9]\)/S\1E\2/g' -e "s/mkv/$VSOURCE.$D_RESOLUTION.hevc.$D_AFORMAT.$D_CFORMAT-elfurbelized.mkv/g")
+    NEW=`echo $NEW | sed 's/S\([0-9\]\)E/S0\1E/g'`
+    
+
+    OPTIONS=(-i "${FILE}"
+    -o "${DIRECTORY}/${NEW}"
+    --crf ${CRF})
+    [ $CROP ] && OPTIONS+=(--crop)
+    [ $OPUS ] && OPTIONS+=(--audio opus)
+    [ $ANIMATION ] && OPTIONS+=(--tune animation)
+    if [ -n "${DEINT}" ]; then
+        if [[ "nnedi yadif mcdeint" =~ "$DEINT" ]]; then
+            [ "${DEINT}" == "mcdeint" ] && DEINT="nnedi"
+            OPTIONS+=(--deint ${DEINT})
+        else
+            echo "unknown deinterlace option, ejecting"
+            exit 1
+        fi
+    fi
+
+    [ $DEBUG ] && echo -e "NEW:\t\t$NEW"
+    [ $DEBUG ] && echo "$TS $HEVCMEUP2 $(printf " %q" "${OPTIONS[@]}")"
+    [ $DEBUG ] || $TS $HEVCMEUP2 "${OPTIONS[@]}"
+done
