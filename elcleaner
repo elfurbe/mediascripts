@@ -160,6 +160,7 @@ case "$AFORMAT" in
     lpcm)   [ -n "$CFORMAT" ] && TRACKNAME="Opus from LPCM ${CFORMAT}" || NOCFORMAT=1;;
     ac3)    [ -n "$CFORMAT" ] && TRACKNAME="Dolby AC-3 ${CFORMAT}" || NOCFORMAT=1;;
     eac3)   [ -n "$CFORMAT" ] && TRACKNAME="Dolby EAC-3 ${CFORMAT}" || NOCFORMAT=1;;
+    opus)   [ -n "$CFORMAT" ] && TRACKNAME="Opus ${CFORMAT}" || NOCFORMAT=1;;
     aac)    [ -n "$CFORMAT" ] && TRACKNAME="AAC ${CFORMAT}" || NOCFORMAT=1;;
     dts)    [ -n "$CFORMAT" ] && TRACKNAME="DTS ${CFORMAT}" || NOCFORMAT=1;;
     *)      echo "Unrecognized format shorthand, using text as entered, with channel format, if provided"; [ -n "$CFORMAT" ] && TRACKNAME="${AFORMAT} ${CFORMAT}" || TRACKNAME="${AFORMAT}";;
