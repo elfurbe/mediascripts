@@ -99,7 +99,6 @@ while [ $# -gt 0 ]; do
             fi
             shift;;
     --ivtc)
-            echo "IVTC"
             if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
                 IVTC="ivtc"
             else
@@ -139,24 +138,24 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 if [ ! -r $SELF_DIR/toolchecker ]; then
-    echo "toolchecker not found."
+    echo "## toolchecker not found."
     exit 1
 else
     . $SELF_DIR/toolchecker
 fi
 
 if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
-    echo "Insufficient options provided."
-    echo "Must supply input (-i/--input) and output (-o/--output) at minimum"
+    echo "## Insufficient options provided."
+    echo "## Must supply input (-i/--input) and output (-o/--output) at minimum"
     usage
     exit 1
 fi
 
 if [ ! -s "$INPUT" ] && [[ "$INPUT" != *"%"* ]]; then
-    echo "Error reading input file: $INPUT"
+    echo "## Error reading input file: $INPUT"
     exit 1
 elif [ -f "$OUTPUT" ]; then
-    echo "Output file exists."
+    echo "## Output file exists."
     exit 1
 fi
 
@@ -165,10 +164,10 @@ INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | sel
 
 PRESET=${PRESET:="medium"}
 if [[ "${PRESET}" != @(ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow|placebo) ]]; then
-    echo "Invalid preset \"${PRESET}\" for x265."
+    echo "## Invalid preset \"${PRESET}\" for x265."
     exit 1
 elif [[ "${PRESET}" == "placebo" ]]; then
-    echo "You may not use placebo. It's a placebo. This was a test and you failed."
+    echo "## You may not use placebo. It's a placebo. This was a test and you failed."
     exit 2
 fi
 
@@ -210,7 +209,7 @@ if [ ! -z "$OPROFILE" ]; then
             VF="${VF:+${VF},}scale=-1:720,crop=960:720:160:0"
             OP_CRF=22;;
         *)
-            echo "Not a recognized output profile name."
+            echo "## Not a recognized output profile name."
             exit 1;;
     esac
     if [ -z "$CRF" ]; then
@@ -227,12 +226,12 @@ case "${BITDEPTH}" in
     8)
         PIXEL_FORMAT="yuv420p";;
     *)
-        echo "Bitdepth ${BITDEPTH} is invalid."
+        echo "## Bitdepth ${BITDEPTH} is invalid."
         exit 1;;
 esac
 
 if [ $CROP ]; then
-    echo "Finding crop..."
+    echo "## Finding crop..."
     SEGMENTS=10
     CFOUTPUT=$($CROPFINDER -i "$INPUT" -s $SEGMENTS -d)
 
@@ -254,8 +253,9 @@ if [ $CROP ]; then
         fi
     fi
     if [ $width -eq 1920 ] && [ $height -eq 1072 ]; then 
-        [ $DEBUG ] && echo "Eight pixel overscan crop ignored"
+        echo "## Eight pixel overscan crop ignored"
     else
+        echo "## ${CROP}"
         VF="${CROP}${VF:+,${VF}}"
     fi
 fi
@@ -284,7 +284,7 @@ if [ $AUDIO ]; then
     AUDIO_TRACK_META=`echo "$AUDIO_TRACK_META" | ${SED} 's/^$//g'`
     if [ $DEBUG ]; then
         echo
-        echo "Input Audio Tracks"
+        echo "## Input Audio Tracks"
         echo "------------------"
         echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${AUDIO_TRACK_META}" | column -t -s, -o " | "
         echo
@@ -302,7 +302,7 @@ if [ $AUDIO ]; then
                     OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_LAYOUT},n/a${NL}"
                 fi
             done < <(echo "$AUDIO_TRACK_META")
-            echo "Output Audio Tracks"
+            echo "## Output Audio Tracks"
             echo "------------------"
             echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
             echo
@@ -335,7 +335,7 @@ if [ $AUDIO ]; then
                     OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
                 fi
             done < <(echo "$AUDIO_TRACK_META")
-            echo "Output Audio Tracks"
+            echo "## Output Audio Tracks"
             echo "------------------"
             echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
             echo
@@ -369,7 +369,7 @@ if [ $AUDIO ]; then
                     OUTPUT_TRACK_META="${OUTPUT_TRACK_META}${TRACK_NUMBER},copy,${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
                 fi
             done < <(echo "$AUDIO_TRACK_META")
-            echo "Output Audio Tracks"
+            echo "## Output Audio Tracks"
             echo "------------------"
             echo "Track,Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | column -t -s, -o " | "
             echo
@@ -451,7 +451,7 @@ if [ $SDR ]; then
 fi
 
 if [ -n "${DEINT}" ] && [ -n "${IVTC}" ]; then
-    echo "Don't deinterlace and also detelecine, that's bad."
+    echo "## Don't deinterlace and also detelecine, that's bad."
     exit 1
 fi
 
@@ -496,9 +496,9 @@ if [ -n "${DEINT}" ]; then
             #else
             #    [ $DEBUG ] && echo "Input video is not interlaced, skipping mcdeint"
             #fi
-            echo "Method mcdeint is deprecated, exiting."; exit 1;;
+            echo "## Method mcdeint is deprecated, exiting."; exit 1;;
         false) ;;
-        *) echo "Unrecognized deinterlace method '${DEINT}', exiting."; exit 1;;
+        *) echo "## Unrecognized deinterlace method '${DEINT}', exiting."; exit 1;;
     esac
 fi
 ## DETELECINE SHENANIGANS
@@ -512,7 +512,7 @@ if [ -n "${IVTC}" ]; then
             else
                 VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
             fi;;
-        *) echo "unrecognized ivtc method '${IVTC}'. exiting."; exit 1;;
+        *) echo "## unrecognized ivtc method '${IVTC}'. exiting."; exit 1;;
     esac
 fi
 
