@@ -253,7 +253,11 @@ if [ $CROP ]; then
             [ $DEBUG ] && echo $CROP
         fi
     fi
-    VF="${CROP}${VF:+,${VF}}"
+    if [ $width -eq 1920 ] && [ $height -eq 1072 ]; then 
+        [ $DEBUG ] && echo "Eight pixel overscan crop ignored"
+    else
+        VF="${CROP}${VF:+,${VF}}"
+    fi
 fi
 
 if [ $AUDIO ]; then        
