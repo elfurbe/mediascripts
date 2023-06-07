@@ -238,25 +238,34 @@ if [ $CROP ]; then
     [ $DEBUG ] && echo "$CFOUTPUT"
     CROP=$(echo "$CFOUTPUT" | tail -n1)
     IFS=':' read width height left top <<< "$(echo "$CROP" | ${AWK} -F= '{print $2}')"
-    if [ $width -ne $INPUT_WIDTH ]; then
-        [ $DEBUG ] && echo "Horizontal crop detected, checking for balance"
-        if [ $(( $width + 2 * $left )) -ne $INPUT_WIDTH ]; then
-            GUTTER_WIDTH=$(( ($INPUT_WIDTH - $width) / 2 ))
-            PAD="pad=$INPUT_WIDTH:$height:$GUTTER_WIDTH:0"
-            CROP="$CROP,$PAD"
-            [ $DEBUG ] && echo "Unbalanced horizontal crop detected, evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTER_WIDTH)"
-            [ $DEBUG ] && echo $CROP
-        else
-            CROP="crop=$INPUT_WIDTH:$height:0:$top"
-            [ $DEBUG ] && echo "Balanced horizontal crop detected, using input width ($INPUT_WIDTH) instead"
-            [ $DEBUG ] && echo $CROP
-        fi
-    fi
-    if [ $width -eq 1920 ] && [ $height -eq 1072 ]; then 
-        echo "## Eight pixel overscan crop ignored"
+    if [ $INPUT_WIDTH -eq $width ] && [ $INPUT_HEIGHT -eq $height ]; then
+        echo "## No crop detected"
     else
-        echo "## ${CROP}"
-        VF="${CROP}${VF:+,${VF}}"
+        if [ $height -eq 1072 ]; then 
+            [ $DEBUG ] && echo "The dumb eight pixel height crop, ignoring"
+            height=1080
+            top=0
+            CROP="crop=$width,1080,$left,0"
+        fi
+        if [ $width -ne $INPUT_WIDTH ]; then
+            [ $DEBUG ] && echo "Horizontal crop detected, checking for balance"
+            if [ $(( $width + 2 * $left )) -ne $INPUT_WIDTH ]; then
+                GUTTER_WIDTH=$(( ($INPUT_WIDTH - $width) / 2 ))
+                PAD="pad=$INPUT_WIDTH:$height:$GUTTER_WIDTH:0"
+                CROP="$CROP,$PAD"
+                [ $DEBUG ] && echo "Unbalanced horizontal crop detected, evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTER_WIDTH)"
+            else
+                width=$INPUT_WIDTH
+                CROP="crop=$INPUT_WIDTH:$height:0:$top"
+                [ $DEBUG ] && echo "Balanced horizontal crop detected, using input width ($INPUT_WIDTH) instead"
+            fi
+        fi
+        if [ $INPUT_WIDTH -eq $width ] && [ $INPUT_HEIGHT -eq $height ]; then
+            echo "## After much consideration, no crop required"
+        else
+            echo "## ${CROP}"
+            VF="${CROP}${VF:+,${VF}}"
+        fi
     fi
 fi
 
