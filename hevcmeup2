@@ -300,10 +300,8 @@ if [ $AUDIO ]; then
         TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
         TRACK_COMPMODE=`echo "${TRACK}" | base64 --decode | $JQ -r '.Compression_Mode'`
         TRACK_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format'`
-        if [ "$TRACK_LAYOUT" = "null" ] && [ "$TRACK_CHANNELS" = "null" ]; then
-            TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
-            TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
-        fi
+        [ "$TRACK_LAYOUT" = "null" ] && TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
+        [ "$TRACK_CHANNELS" = "null" ] && TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
         TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
         AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
     done
