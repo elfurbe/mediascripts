@@ -498,13 +498,13 @@ if [ -n "${DEINT}" ]; then
             THREADS=18
             VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}";;
         yadif*) 
-            MODE=$(echo $DEINT | awk -F, '{print $2}')
-            YADIFMODE=${MODE:=1}
+            YADIFOPTS=$(echo $DEINT | awk -F, '{print $2}')
+            YADIFOPTS=${YADIFOPTS:="1:0:0"}
             if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
                 if [ "$SCANORDER" = "Top Field First" ]; then
-                    VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
+                    VF="yadif=${YADIFOPTS}${VF:+,${VF}}"
                 else
-                    VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+                    VF="yadif=${YADIFOPTS}${VF:+,${VF}}"
                 fi
             else
                 [ $DEBUG ] && echo "Input video is not interlaced, skipping deint"
