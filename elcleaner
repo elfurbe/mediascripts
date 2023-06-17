@@ -197,6 +197,15 @@ else
     exit 1
 fi
 
+echo "## Theraputic tag strip"
+$MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
+if [ $? -eq 0 ]; then
+    echo "## Tags stripped."
+else
+    echo "## Tag stripping error"
+    exit 1
+fi
+
 if [ $STRIPCOMPAT ]; then
     OUTPUT2="${OUTPUT:0: -4}_2.mkv"
     MERGEOPTIONS=(-o "${OUTPUT2}"
