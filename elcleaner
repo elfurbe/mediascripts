@@ -201,6 +201,14 @@ echo "## Theraputic tag strip"
 $MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
 if [ $? -eq 0 ]; then
     echo "## Tags stripped."
+    echo "## Adding back stats"
+    $MKVPROPEDIT --add-track-statistics-tags "${OUTPUT}"
+    if [ $? -eq 0 ]; then
+        echo "## Stats added"
+    else
+        echo "## Stats adding error"
+        exit 1
+    fi
 else
     echo "## Tag stripping error"
     exit 1
