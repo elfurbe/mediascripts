@@ -16,6 +16,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -st|--stracks:      comma separated list of subtitle track numbers to keep
 -sc|--stripcompat:  strip ac3 compatibility tracks if found
 -fo|--firstonly:    only keep the first audio track
+-s|--striptags:     sometimes input tags sneak into the output, restrip/restat output file
 --debug:            print debugging information
 
 EOF
@@ -76,6 +77,9 @@ while [ $# -gt 0 ]; do
         shift;;
     -fo|--firstonly)
         FIRSTONLY=1
+        shift;;
+    -s|--striptags)
+        STRIPTAGS=1
         shift;;
     --debug)
         DEBUG=1
@@ -197,21 +201,23 @@ else
     exit 1
 fi
 
-echo "## Theraputic tag strip"
-$MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
-if [ $? -eq 0 ]; then
-    echo "## Tags stripped."
-    echo "## Adding back stats"
-    $MKVPROPEDIT --add-track-statistics-tags "${OUTPUT}"
+if [ $STRIPTAGS ]; then
+    echo "## Theraputic tag strip"
+    $MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
     if [ $? -eq 0 ]; then
-        echo "## Stats added"
+        echo "## Tags stripped."
+        echo "## Adding back stats"
+        $MKVPROPEDIT --add-track-statistics-tags "${OUTPUT}"
+        if [ $? -eq 0 ]; then
+            echo "## Stats added"
+        else
+            echo "## Stats adding error"
+            exit 1
+        fi
     else
-        echo "## Stats adding error"
+        echo "## Tag stripping error"
         exit 1
     fi
-else
-    echo "## Tag stripping error"
-    exit 1
 fi
 
 if [ $STRIPCOMPAT ]; then
