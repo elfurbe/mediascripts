@@ -275,6 +275,7 @@ if [ $CROP ]; then
                 fi
             else
                 echo "## Ran out of cropping ideas. Look at this crop with your eyes, type it in with your hands."
+                echo "## This is what cropfinder delivered: ${CROP}"
                 exit 1
             fi
         fi
