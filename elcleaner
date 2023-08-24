@@ -116,6 +116,11 @@ elif [ -z "$OUTPUT_DIR" ] && [ -z "$OUTPUT" ]; then
     OUTPUT="${INPUT:0: -4}_1.mkv"
 fi
 
+if [ -f "${OUTPUT}" ]; then
+    echo "${OUTPUT} already exists. Exiting."
+    exit 1
+fi
+
 if [ -z "$AUDIO_TRACKS" ]; then
     AUDIO_TRACKS="eng"
 fi
