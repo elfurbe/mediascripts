@@ -1,21 +1,170 @@
 #!/bin/bash
 
-NEW=$1
-ORIG=$2
+# trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
 
-if [ -z "$1" ] || [ -z "$2" ]; then
-    echo "Incomplete arguments"
-    echo "usage: $0 <changed file> <reference file>"
-    exit
+function ctrl_c() {
+    echo "Exiting."
+    exit 1
+}
+
+usage() {
+cat - <<EOF
+Usage: $NAME -e <ENCODED FILE> -s <SOURCE FILE>
+
+-h|--help:      show this help message
+-e|--encoded:   encoded file to test
+-s|--source:    original source file
+--no-ssim:      disable ssim calculation
+--no-ms_ssim:   disable ms_ssim calculation
+--no-psnr:      disable psnr calculation
+--subsample:    set number of frames to subsample (default: equal to frame rate)
+--log:          override default vmaf logfile destination
+--log-format:   specify vmaf log format (csv, json, xml, or sub, default: csv)
+--model:        override default vmaf model (full path to model json)
+--threads:      specify number of threads (default: no limit)
+-d|--debug:     enable debugging output
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -e|--encoded)
+            shift
+            ENCODED="${1}"
+            if [ ! -s "$ENCODED" ]; then
+                echo "Error reading encoded file: $ENCODED"
+                exit 1
+            fi
+            shift;;
+    -s|--source)
+            shift
+            SOURCE="${1}"
+            if [ ! -s "$SOURCE" ]; then
+                echo "Error reading source file: $SOURCE"
+                exit 1
+            fi
+            shift;;
+    --subsample)
+            shift
+            SUBSAMPLE="${1}"
+            shift;;
+    --log)
+            shift
+            LOG="${1}"
+            shift;;
+    --log-format)
+            shift
+            if [[ "csv json xml sub" == *"${1}"* ]]; then
+                LOG_FORMAT="${1}"
+            else
+                echo "invalid log format"
+                exit 1
+            fi
+            shift;;
+    --model)
+            shift
+            MODEL="${1}"
+            shift;;
+    --threads)
+            shift
+            THREADS="${1}"
+            shift;;
+    -d|--debug)
+            DEBUG=1
+            shift;;
+    --no-ssim)
+            NOSSIM=1
+            shift;;
+    --no-ms_ssim)
+            NOMSSSIM=1
+            shift;;
+    --no-psnr)
+            NOPSNR=1
+            shift;;
+    --no-cambi)
+            NOCAMBI=1
+            shift;;
+    --no-vif)
+            NOVIF=1
+            shift;;
+    -h|--help)
+            usage
+            exit;;
+    *)
+            echo "$0: invalid option ${1}"
+            echo "$0 -h for usage options"
+            usage
+            exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list, we only need these two
+TOOLS=(ffmpeg ffprobe bc)
+# Does not depend on any other scripts
+SCRIPTS=NONE
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
 fi
 
-#FRAME_RATE=`ffprobe "$ORIG" 2>&1| grep Video | awk -F", " '{print $6}' | awk '{print $1}'`
-FRAME_RATE=`ffprobe -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate "$ORIG" | bc -l`
-SUBSAMPLE=`printf "%.0f\n" "$FRAME_RATE"`
-LOG="$(basename ${NEW} .mkv).vmaf"
+if [ -z "$ENCODED" ]; then
+    echo "Must supply encoded (-e/--encoded) file"
+    usage
+    exit 1
+fi
 
-VMAF_PARAMS="model='path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json':n_subsample=${SUBSAMPLE}:log_fmt=csv:log_path=${LOG}:feature='name=float_ssim':feature='name=float_ms_ssim':feature='name=psnr':feature='name=vif':feature='name=cambi':feature='name=ssim':feature='name=ms_ssim':feature='name=psnr':ssim=1:psnr=1:ms_ssim=1"
+if [ -z "$SOURCE" ]; then
+    echo "Must supply source (-s/--source) file"
+    usage
+    exit 1
+fi
 
-#ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="model_path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json:n_subsample=${SUBSAMPLE}:log_fmt=csv:ssim=true:psnr=true:log_path=${LOG}" -f null -
-echo "ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
-ffmpeg -i ${NEW} -i ${ORIG} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
+## START BUILDING THE VMAF_PARAMS STRING
+
+if [ -z "$MODEL" ]; then
+    VMAF_PARAMS="model='path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json'"
+else
+    VMAF_PARAMS="model='path=${MODEL}'"
+fi
+
+if [ -z "$SUBSAMPLE" ]; then
+    FRAME_RATE=`$FFPROBE -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate "$SOURCE" | $BC -l`
+    SUBSAMPLE=`printf "%.0f\n" "$FRAME_RATE"`
+fi    
+VMAF_PARAMS="${VMAF_PARAMS}:n_subsample=${SUBSAMPLE}"
+
+if [ -z "$LOG_FORMAT" ]; then
+    LOG_FORMAT="csv"
+fi
+VMAF_PARAMS="${VMAF_PARAMS}:log_fmt=${LOG_FORMAT}"
+
+if [ -z "$LOG" ]; then
+    LOG="$(basename ${ENCODED} .mkv).vmaf"
+fi
+VMAF_PARAMS="${VMAF_PARAMS}:log_path=${LOG}"
+
+SSIM="feature='name=float_ssim':feature='name=ssim':ssim=1'"
+[ ! $NOSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$SSIM"
+
+MSSSIM="feature='name=float_ms_ssim':feature='name=ms_ssim':ms_ssim=1"
+[ ! $NOMSSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$MSSSIM"
+
+PSNR="feature='name=psnr':psnr=1"
+[ ! $NOPSNR ] && VMAF_PARAMS="${VMAF_PARAMS}:$PSNR"
+
+VIF="feature='name=vif'"
+[ ! $NOVIF ] && VMAF_PARAMS="${VMAF_PARAMS}:$VIF"
+
+CAMBI="feature='name=cambi'"
+[ ! $NOCAMBI ] && VMAF_PARAMS="${VMAF_PARAMS}:$CAMBI"
+
+echo "$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
+$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
