@@ -28,6 +28,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --audio:        transcode audio tracks to selected codec [flac, opus, aac]
 --square:       convert anamorphic to square pixels which make sense
 --forcelossy:  transcode all audio tracks to selected codec
+--copyhdr:     copy HDR metadata (probably doesn't work, who knows, fuck ffmpeg forever)
 
 EOF
 }
@@ -117,6 +118,9 @@ while [ $# -gt 0 ]; do
             shift;;
     --forcelossy)
             FORCE_LOSSY=1
+            shift;;
+    --copyhdr)
+            COPY_HDR=1
             shift;;
     -h|--help)
             usage
@@ -405,6 +409,15 @@ case "${ENCODER}" in
         else
             SVTAV1_PARAMS="tune=0"
         fi
+    if [ $COPY_HDR ]; then
+        ## REFERENCES
+        # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
+        ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
+        eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
+        #X265_PARAMS="${X265_PARAMS}:hdr-opt=1:repeat-headers=1:colorprim=${VIDEO_COLOR_PRIMARIES}:transfer=${VIDEO_COLOR_TRANSFER}:colormatrix=${VIDEO_COLOR_SPACE}:master-display=G(${VIDEO_GREEN_X%/*},${VIDEO_GREEN_Y%/*})B(${VIDEO_BLUE_X%/*},${VIDEO_BLUE_Y%/*})R(${VIDEO_RED_X%/*},${VIDEO_RED_Y%/*})WP(${VIDEO_WHITE_POINT_X%/*},${VIDEO_WHITE_POINT_Y%/*})L(${VIDEO_MAX_LUMINANCE%/*},${VIDEO_MIN_LUMINANCE%/*}):max-cll=${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+        SVTAV1_PARAMs="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE}:mastering-display=G(${VIDEO_GREEN_X%/*},${VIDEO_GREEN_Y%/*})B(${VIDEO_BLUE_X%/*},${VIDEO_BLUE_Y%/*})R(${VIDEO_RED_X%/*},${VIDEO_RED_Y%/*})WP(${VIDEO_WHITE_POINT_X%/*},${VIDEO_WHITE_POINT_Y%/*})L(${VIDEO_MAX_LUMINANCE%/*},${VIDEO_MIN_LUMINANCE%/*}):content-light=${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+        ## I'm sneaky forcing the fast analysis preset cause the only HDR I encode is 4k and 4k is so painfully slow already that I'll take the half-point drop in VMAF to shave 40% off the encoding time
+        #PRESET="fast"
     fi
         VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${PRESET} -g ${G} -crf ${CRF} -svtav1-params ${SVTAV1_PARAMS}"
         ;;
