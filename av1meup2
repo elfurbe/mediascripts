@@ -68,6 +68,10 @@ while [ $# -gt 0 ]; do
             shift
             TUNE="${1}"
             shift;;
+    --svt-preset)
+            shift
+            SVT_PRESET="${1}"
+            shift;;
     --svt-params)
             shift
             SVT_PARAMS="${1}"
@@ -402,7 +406,11 @@ case "${ENCODER}" in
         VIDEO="-c:V libaom-av1 -pix_fmt ${PIXEL_FORMAT} -crf ${CRF} -b:v 0 -cpu-used ${CPUUSED} -tiles ${TILES} -row-mt ${ROW_MT} -threads ${THREADS}"
         ;;
     svt)
-        PRESET=5
+	if [ ! -z "$SVT_PRESET" ]; then
+	    PRESET=$SVT_PRESET
+        else
+            PRESET=5
+	fi
         G=240
         if [ ! -z "$SVT_PARAMS" ]; then
             SVTAV1_PARAMS="${SVT_PARAMS}"
