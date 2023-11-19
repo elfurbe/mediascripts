@@ -130,7 +130,12 @@ fi
 ## START BUILDING THE VMAF_PARAMS STRING
 
 if [ -z "$MODEL" ]; then
-    VMAF_PARAMS="model='path=/opt/ffmpeg5_gcc12/share/vmaf/model/vmaf_v0.6.1.json'"
+    if [ ! -z "$FFMPEG_PATH" ]; then
+    	VMAF_PARAMS="model='path=${FFMPEG_PATH}/share/vmaf/model/vmaf_v0.6.1.json'"
+    else
+    	VMAF_PARAMS="model='path=/opt/ffmpeg5/share/vmaf/model/vmaf_v0.6.1.json'"
+    fi
+
 else
     VMAF_PARAMS="model='path=${MODEL}'"
 fi
