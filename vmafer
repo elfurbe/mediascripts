@@ -105,7 +105,7 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list, we only need these two
-TOOLS=(ffmpeg ffprobe bc)
+TOOLS=(ffmpeg ffprobe bc mediainfo jq base64)
 # Does not depend on any other scripts
 SCRIPTS=NONE
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -128,13 +128,23 @@ if [ -z "$SOURCE" ]; then
 fi
 
 ## START BUILDING THE VMAF_PARAMS STRING
+MI=$($MEDIAINFO --output=JSON "$SOURCE" | $BASE64)
 
 if [ -z "$MODEL" ]; then
-    if [ ! -z "$FFMPEG_PATH" ]; then
-    	VMAF_PARAMS="model='path=${FFMPEG_PATH}/share/vmaf/model/vmaf_v0.6.1.json'"
+    WIDTH=`echo "${MI}" | $BASE64 --decode | $JQ -r '.media.track[] | select (."@type"=="Video").Width'`
+    if [ $WIDTH -gt 1080 ]; then
+	[ $DEBUG ] && echo "SOURCE WIDTH: $WIDTH"
+        MODELFILE="vmaf_4k_v0.6.1.json"
     else
-    	VMAF_PARAMS="model='path=/opt/ffmpeg5/share/vmaf/model/vmaf_v0.6.1.json'"
+        MODELFILE="vmaf_v0.6.1.json"
     fi
+    [ $DEBUG ] && echo "MODELFILE: $MODELFILE"
+    if [ ! -z "$FFMPEG_PATH" ]; then
+    	VMAF_PARAMS="model='path=${FFMPEG_PATH}/share/vmaf/model/${MODELFILE}'"
+    else
+    	VMAF_PARAMS="model='path=/opt/ffmpeg5/share/vmaf/model/${MODELFILE}'"
+    fi
+    [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
 
 else
     VMAF_PARAMS="model='path=${MODEL}'"
@@ -171,5 +181,7 @@ VIF="feature='name=vif'"
 CAMBI="feature='name=cambi'"
 [ ! $NOCAMBI ] && VMAF_PARAMS="${VMAF_PARAMS}:$CAMBI"
 
-echo "$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
-$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
+[ $DEBUG ] && echo
+[ $DEBUG ] && echo "$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
+[ $DEBUG ] || $FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
+
