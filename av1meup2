@@ -2,6 +2,7 @@
 
 usage() {
 cat - <<EOF
+
 Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 
 -h|--help:      show this help message
@@ -9,9 +10,8 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -o|--output:    file name for output
 --start:        start time for encode (default: unset)
 --duration:     duration of encode (default: unset)
---encoder:      which av1 encoder to use (aom, svt, rav1e)
---crf:          crf value (default varies with input res, 1080:18, 720: 22, 480: 26)
---svt-preset:   SVT-AV1 preset value (default: 5)
+--crf:          crf value (default varies with input res, 1080:30, 720: 35, 480: 40)
+--svt-preset:   SVT-AV1 preset value (default: 7)
 --svt-params:   SVT-AV1 parameters string (default: unset)
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
@@ -52,21 +52,9 @@ while [ $# -gt 0 ]; do
             shift
             DURATION="${1}"
             shift;;
-    --encoder)
-            shift
-            ENCODER="${1}"
-            shift;;
     --crf)
             shift
             CRF="${1}"
-            shift;;
-    --preset)
-            shift
-            PRESET="${1}"
-            shift;;
-    --tune)
-            shift
-            TUNE="${1}"
             shift;;
     --svt-preset)
             shift
@@ -165,22 +153,13 @@ fi
 INPUT_WIDTH=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Width'`
 INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Height'`
 
-PRESET=${PRESET:="medium"}
-if [[ "${PRESET}" != @(ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow|placebo) ]]; then
-    echo "Invalid preset \"${PRESET}\" for x265."
-    exit 1
-elif [[ "${PRESET}" == "placebo" ]]; then
-    echo "You may not use placebo. It's a placebo. This was a test and you failed."
-    exit 2
-fi
-
 if [ -z "$CRF" -a -z "$OPROFILE" ]; then
     if [ "$INPUT_WIDTH" -gt 1280 ]; then
-        CRF=18
+        CRF=30
     elif [ "$INPUT_WIDTH" -gt 854 ]; then
-        CRF=22
+        CRF=35
     else
-        CRF=26
+        CRF=40
     fi
 fi
 
@@ -192,26 +171,26 @@ if [ ! -z "$OPROFILE" ]; then
     case "${OPROFILE}" in
         1080)
             VF="${VF:+${VF},}scale=1920:-1"
-            OP_CRF=18;;
+            OP_CRF=30;;
         900)
             VF="${VF:+${VF},}scale=1600:-1"
-            OP_CRF=19;;
+            OP_CRF=32;;
         810)
             VF="${VF:+${VF},}scale=1440:-1"
-            OP_CRF=20;;
+            OP_CRF=34;;
         720)
             VF="${VF:+${VF},}scale=1280:-1"
             #VF="scale=1280:-1${VF:+,${VF}}"
-            OP_CRF=22;;
+            OP_CRF=35;;
         480)
             VF="${VF:+${VF},}scale=720:-1"
-            OP_CRF=26;;
+            OP_CRF=40;;
         1440)
             VF="${VF:+${VF},}scale=-1:1080,crop=1440:1080:240:0"
-            OP_CRF=18;;
+            OP_CRF=30;;
         960)
             VF="${VF:+${VF},}scale=-1:720,crop=960:720:160:0"
-            OP_CRF=22;;
+            OP_CRF=35;;
         *)
             echo "Not a recognized output profile name."
             exit 1;;
@@ -393,47 +372,29 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
-if [ -z ${ENCODER} ]; then
-    ENCODER=svt
+## SET GOP SIZE
+## ~10x frame rate, not more than 300, 240 is probably fine for everything?
+G=240
+
+if [ -z "$SVT_PRESET" ]; then
+    SVT_PRESET=7
 fi
 
-case "${ENCODER}" in
-    aom)
-        CPUUSED=5
-        TILES="2x2"
-        ROW_MT=1
-        THREADS=6
-        VIDEO="-c:V libaom-av1 -pix_fmt ${PIXEL_FORMAT} -crf ${CRF} -b:v 0 -cpu-used ${CPUUSED} -tiles ${TILES} -row-mt ${ROW_MT} -threads ${THREADS}"
-        ;;
-    svt)
-	if [ ! -z "$SVT_PRESET" ]; then
-	    PRESET=$SVT_PRESET
-        else
-            PRESET=5
-	fi
-        G=240
-        if [ ! -z "$SVT_PARAMS" ]; then
-            SVTAV1_PARAMS="${SVT_PARAMS}"
-        else
-            SVTAV1_PARAMS="tune=0"
-        fi
-    if [ $COPY_HDR ]; then
-        ## REFERENCES
-        # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
-        ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-        eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE/nc/-ncl}:mastering-display=G($(echo "scale=4;$VIDEO_GREEN_X" | bc),$(echo "scale=4;$VIDEO_GREEN_Y" | bc))B($(echo "scale=4;$VIDEO_BLUE_X" | bc),$(echo "scale=4;$VIDEO_BLUE_Y" | bc))R($(echo "scale=4;$VIDEO_RED_X" | bc),$(echo "scale=4;$VIDEO_RED_Y" | bc))WP($(echo "scale=4;$VIDEO_WHITE_POINT_X" | bc),$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | bc))L($(echo "scale=4;$VIDEO_MAX_LUMINANCE" | bc),$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | bc)):content-light=${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
-    fi
-        VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${PRESET} -g ${G} -crf ${CRF} -svtav1-params ${SVTAV1_PARAMS}"
-        ;;
-    rav1e)
-        QP=40
-        SPEED=5
-        TROWS=4
-        TCOLS=2
-        VIDEO="-c:V librav1e -pix_fmt ${PIXEL_FORMAT} -qp ${QP} -speed ${SPEED} -tile-rows ${TROWS} -tile-columns ${TCOLS}"
-        ;;
-esac
+if [ ! -z "$SVT_PARAMS" ]; then
+    SVTAV1_PARAMS="${SVT_PARAMS}"
+else
+    SVTAV1_PARAMS="tune=0"
+fi
+
+if [ $COPY_HDR ]; then
+    ## REFERENCES
+    # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
+    ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
+    eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
+    SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE/nc/-ncl}:mastering-display=G($(echo "scale=4;$VIDEO_GREEN_X" | bc),$(echo "scale=4;$VIDEO_GREEN_Y" | bc))B($(echo "scale=4;$VIDEO_BLUE_X" | bc),$(echo "scale=4;$VIDEO_BLUE_Y" | bc))R($(echo "scale=4;$VIDEO_RED_X" | bc),$(echo "scale=4;$VIDEO_RED_Y" | bc))WP($(echo "scale=4;$VIDEO_WHITE_POINT_X" | bc),$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | bc))L($(echo "scale=4;$VIDEO_MAX_LUMINANCE" | bc),$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | bc)):content-light=${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+fi
+
+VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${SVT_PRESET} -g ${G} -crf ${CRF} -svtav1-params ${SVTAV1_PARAMS}"
 
 MAPS="-map 0 -map -0:d"
 TRAILERS="-c:s copy -max_muxing_queue_size 9999"
