@@ -153,16 +153,6 @@ fi
 INPUT_WIDTH=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Width'`
 INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Height'`
 
-if [ -z "$CRF" -a -z "$OPROFILE" ]; then
-    if [ "$INPUT_WIDTH" -gt 1280 ]; then
-        CRF=30
-    elif [ "$INPUT_WIDTH" -gt 854 ]; then
-        CRF=35
-    else
-        CRF=40
-    fi
-fi
-
 if [ $SQUARE ]; then
     VF="scale=iw*sar:ih,setsar=1:1"
 fi
@@ -180,7 +170,6 @@ if [ ! -z "$OPROFILE" ]; then
             OP_CRF=34;;
         720)
             VF="${VF:+${VF},}scale=1280:-1"
-            #VF="scale=1280:-1${VF:+,${VF}}"
             OP_CRF=35;;
         480)
             VF="${VF:+${VF},}scale=720:-1"
@@ -198,7 +187,18 @@ if [ ! -z "$OPROFILE" ]; then
     if [ -z "$CRF" ]; then
         CRF=$OP_CRF
     fi
+elif [ -z "$CRF" -a -z "$OPROFILE" ]; then
+    if [ "$INPUT_WIDTH" -gt 1920 ]; then
+        CRF=25
+    elif [ "$INPUT_WIDTH" -gt 1280 ]; then
+        CRF=30
+    elif [ "$INPUT_WIDTH" -gt 854 ]; then
+        CRF=35
+    else
+        CRF=40
+    fi
 fi
+
 
 BITDEPTH=${BITDEPTH:=10}
 case "${BITDEPTH}" in
