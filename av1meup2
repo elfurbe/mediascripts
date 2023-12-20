@@ -391,7 +391,41 @@ if [ $COPY_HDR ]; then
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
     eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
-    SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE/nc/-ncl}:mastering-display=G($(echo "scale=4;$VIDEO_GREEN_X" | bc),$(echo "scale=4;$VIDEO_GREEN_Y" | bc))B($(echo "scale=4;$VIDEO_BLUE_X" | bc),$(echo "scale=4;$VIDEO_BLUE_Y" | bc))R($(echo "scale=4;$VIDEO_RED_X" | bc),$(echo "scale=4;$VIDEO_RED_Y" | bc))WP($(echo "scale=4;$VIDEO_WHITE_POINT_X" | bc),$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | bc))L($(echo "scale=4;$VIDEO_MAX_LUMINANCE" | bc),$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | bc)):content-light=${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+
+    VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
+
+    ## Processing up the variables from ffprobe fractions to floats
+    VIDEO_GREEN_X_BC=$(echo "scale=4;$VIDEO_GREEN_X" | bc)
+    VIDEO_GREEN_Y_BC=$(echo "scale=4;$VIDEO_GREEN_Y" | bc)
+    VIDEO_BLUE_X_BC=$(echo "scale=4;$VIDEO_BLUE_X" | bc)
+    VIDEO_BLUE_Y_BC=$(echo "scale=4;$VIDEO_BLUE_Y" | bc)
+    VIDEO_RED_X_BC=$(echo "scale=4;$VIDEO_RED_X" | bc)
+    VIDEO_RED_Y_BC=$(echo "scale=4;$VIDEO_RED_Y" | bc)
+    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_X" | bc)
+    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | bc)
+    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | bc)
+    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | bc)
+
+    if [ "$VIDEO_COLOR_TRANSFER" = "arib-std-b67" ]; then #HLG
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
+    elif [ "$VIDEO_COLOR_TRANSFER" = "smpte2084" ]; then #HDR10
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
+
+        GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+        BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+        RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+        WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+        LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+        CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+        
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}"
+    else
+        echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
+        echo "Bailing out."
+        exit 1
+    fi
 fi
 
 VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${SVT_PRESET} -g ${G} -crf ${CRF} -svtav1-params ${SVTAV1_PARAMS}"
