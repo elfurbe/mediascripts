@@ -18,6 +18,8 @@ Usage: $NAME -e <ENCODED FILE> -s <SOURCE FILE>
 --no-ssim:      disable ssim calculation
 --no-ms_ssim:   disable ms_ssim calculation
 --no-psnr:      disable psnr calculation
+--no-adm:       disable adm calculation
+--no-motion2:   disable adm motion2 calculation
 --subsample:    set number of frames to subsample (default: equal to frame rate)
 --log:          override default vmaf logfile destination
 --log-format:   specify vmaf log format (csv, json, xml, or sub, default: csv)
@@ -90,6 +92,12 @@ while [ $# -gt 0 ]; do
     --no-vif)
             NOVIF=1
             shift;;
+    --no-adm)
+            NOADM=1
+            shift;;
+    --no-motion2)
+            NOMOTION2=1
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -132,20 +140,25 @@ MI=$($MEDIAINFO --output=JSON "$SOURCE" | $BASE64)
 
 if [ -z "$MODEL" ]; then
     WIDTH=`echo "${MI}" | $BASE64 --decode | $JQ -r '.media.track[] | select (."@type"=="Video").Width'`
-    if [ $WIDTH -gt 1080 ]; then
 	[ $DEBUG ] && echo "SOURCE WIDTH: $WIDTH"
+    if [ $WIDTH -gt 1920 ]; then
         MODELFILE="vmaf_4k_v0.6.1.json"
     else
         MODELFILE="vmaf_v0.6.1.json"
     fi
     [ $DEBUG ] && echo "MODELFILE: $MODELFILE"
-    if [ ! -z "$FFMPEG_PATH" ]; then
-    	VMAF_PARAMS="model='path=${FFMPEG_PATH}/share/vmaf/model/${MODELFILE}'"
+    if [ ! -z "$FFMPEG_PREFIX" ]; then
+    	MODELPATH="${FFMPEG_PREFIX}/share/vmaf/model/${MODELFILE}"
     else
-    	VMAF_PARAMS="model='path=/opt/ffmpeg5/share/vmaf/model/${MODELFILE}'"
+    	MODELPATH="/opt/ffmpeg5/share/vmaf/model/${MODELFILE}"
     fi
-    [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
-
+    if [ -s ${MODELPATH} ]; then
+        VMAF_PARAMS="model='path=${MODELPATH}'"
+        [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
+    else
+        echo "'${MODELPATH}' is not a file"
+        exit 1
+    fi
 else
     VMAF_PARAMS="model='path=${MODEL}'"
 fi
@@ -162,17 +175,19 @@ fi
 VMAF_PARAMS="${VMAF_PARAMS}:log_fmt=${LOG_FORMAT}"
 
 if [ -z "$LOG" ]; then
-    LOG="$(basename ${ENCODED} .mkv).vmaf"
+    LOG="$(basename "${ENCODED}" .mkv).vmaf"
 fi
 VMAF_PARAMS="${VMAF_PARAMS}:log_path=${LOG}"
 
-SSIM="feature='name=float_ssim':feature='name=ssim':ssim=1'"
+#SSIM="feature='name=float_ssim':feature='name=ssim':ssim=1'"
+SSIM="feature='name=float_ssim'"
 [ ! $NOSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$SSIM"
 
-MSSSIM="feature='name=float_ms_ssim':feature='name=ms_ssim':ms_ssim=1"
+#MSSSIM="feature='name=float_ms_ssim':feature='name=ms_ssim':ms_ssim=1"
+MSSSIM="feature='name=float_ms_ssim'"
 [ ! $NOMSSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$MSSSIM"
 
-PSNR="feature='name=psnr':psnr=1"
+PSNR="feature='name=psnr':feature='name=psnr_hvs'"
 [ ! $NOPSNR ] && VMAF_PARAMS="${VMAF_PARAMS}:$PSNR"
 
 VIF="feature='name=vif'"
@@ -181,7 +196,13 @@ VIF="feature='name=vif'"
 CAMBI="feature='name=cambi'"
 [ ! $NOCAMBI ] && VMAF_PARAMS="${VMAF_PARAMS}:$CAMBI"
 
+ADM="feature='name=adm'"
+[ ! $NOADM ] && VMAF_PARAMS="${VMAF_PARAMS}:$ADM"
+
+MOTION2="feature='name=motion'"
+[ ! $NOMOTION2 ] && VMAF_PARAMS="${VMAF_PARAMS}:$MOTION2"
+
 [ $DEBUG ] && echo
-[ $DEBUG ] && echo "$FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
-[ $DEBUG ] || $FFMPEG -i ${ENCODED} -i ${SOURCE} -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
+[ $DEBUG ] && echo "$FFMPEG -i \"${ENCODED}\" -i \"${SOURCE}\" -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
+[ $DEBUG ] || $FFMPEG -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
 
