@@ -19,7 +19,8 @@ Usage: $NAME -e <ENCODED FILE> -s <SOURCE FILE>
 --no-ms_ssim:   disable ms_ssim calculation
 --no-psnr:      disable psnr calculation
 --no-adm:       disable adm calculation
---no-motion2:   disable adm motion2 calculation
+--no-motion2:   disable motion2 calculation
+--no-ciede:     disable ciede calculation
 --subsample:    set number of frames to subsample (default: equal to frame rate)
 --log:          override default vmaf logfile destination
 --log-format:   specify vmaf log format (csv, json, xml, or sub, default: csv)
@@ -179,28 +180,38 @@ if [ -z "$LOG" ]; then
 fi
 VMAF_PARAMS="${VMAF_PARAMS}:log_path=${LOG}"
 
+VMAF_FEATURES=""
+## EXAMPLE FROM https://ffmpeg.org/ffmpeg-all.html#libvmaf
+#feature=name=psnr|name=ciede
+
 #SSIM="feature='name=float_ssim':feature='name=ssim':ssim=1'"
-SSIM="feature='name=float_ssim'"
-[ ! $NOSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$SSIM"
+SSIM="name=float_ssim"
+[ ! $NOSSIM ] && VMAF_FEATURES="${VMAF_FEATURES}|$SSIM"
 
 #MSSSIM="feature='name=float_ms_ssim':feature='name=ms_ssim':ms_ssim=1"
-MSSSIM="feature='name=float_ms_ssim'"
-[ ! $NOMSSSIM ] && VMAF_PARAMS="${VMAF_PARAMS}:$MSSSIM"
+MSSSIM="name=float_ms_ssim"
+[ ! $NOMSSSIM ] && VMAF_FEATURES="${VMAF_FEATURES}|$MSSSIM"
 
-PSNR="feature='name=psnr':feature='name=psnr_hvs'"
-[ ! $NOPSNR ] && VMAF_PARAMS="${VMAF_PARAMS}:$PSNR"
+#PSNR="feature='name=psnr':feature='name=psnr_hvs'"
+PSNR="name=psnr"
+[ ! $NOPSNR ] && VMAF_FEATURES="${VMAF_FEATURES}|$PSNR"
 
-VIF="feature='name=vif'"
-[ ! $NOVIF ] && VMAF_PARAMS="${VMAF_PARAMS}:$VIF"
+VIF="name=vif"
+[ ! $NOVIF ] && VMAF_FEATURES="${VMAF_FEATURES}|$VIF"
 
-CAMBI="feature='name=cambi'"
-[ ! $NOCAMBI ] && VMAF_PARAMS="${VMAF_PARAMS}:$CAMBI"
+CAMBI="name=cambi"
+[ ! $NOCAMBI ] && VMAF_FEATURES="${VMAF_FEATURES}|$CAMBI"
 
-ADM="feature='name=adm'"
-[ ! $NOADM ] && VMAF_PARAMS="${VMAF_PARAMS}:$ADM"
+ADM="name=adm"
+[ ! $NOADM ] && VMAF_FEATURES="${VMAF_FEATURES}|$ADM"
 
-MOTION2="feature='name=motion'"
-[ ! $NOMOTION2 ] && VMAF_PARAMS="${VMAF_PARAMS}:$MOTION2"
+MOTION2="name=motion"
+[ ! $NOMOTION2 ] && VMAF_FEATURES="${VMAF_FEATURES}|$MOTION2"
+
+CIEDE="name=ciede"
+[ ! $NOCIEDE ] && VMAF_FEATURES="${VMAF_FEATURES}|$CIEDE"
+
+VMAF_PARAMS="${VMAF_PARAMS}:feature=${VMAF_FEATURES#"|"}"
 
 [ $DEBUG ] && echo
 [ $DEBUG ] && echo "$FFMPEG -i \"${ENCODED}\" -i \"${SOURCE}\" -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
