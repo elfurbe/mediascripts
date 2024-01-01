@@ -183,16 +183,22 @@ fi
 printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
 
 IFS=""
-MERGEOPTIONS=(-o "${OUTPUT}"
---no-attachments
+
+## I'm breaking this up so I can play more games with the order later if I need to
+MERGEOPTIONS=()
+MERGEOPTIONS+=(-o "${OUTPUT}")
+MERGEOPTIONS+=(--no-attachments
 --no-track-tags
 --no-global-tags
---no-buttons
--a ${AUDIO_TRACKS}
--s ${SUBTITLE_TRACKS}
---track-name 0:\ 
---track-name 1:"${TRACKNAME}"
-"${INPUT}")
+--no-buttons)
+MERGEOPTIONS+=(-a ${AUDIO_TRACKS})
+MERGEOPTIONS+=(-s ${SUBTITLE_TRACKS})
+## the space at the end is important, it unsets the track name entirely
+MERGEOPTIONS+=(--track-name 0:\ )
+MERGEOPTIONS+=(--track-name 1:"${TRACKNAME}")
+MERGEOPTIONS+=(--language 0:eng)
+#MERGEOPTIONS+=(--language 1:en)
+MERGEOPTIONS+=("${INPUT}")
 unset IFS
 
 echo "## Merging..."
