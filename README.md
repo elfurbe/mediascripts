@@ -8,11 +8,11 @@ My assorted media manipulation scripts
   - audiovise
     - Just transcodes audio, does not touch video
     - It's a 30 Rock joke
-  - av1meup
-    - A poorly maintained mod of hevcmeup2 for av1 instead of hevc
-    - Protip: AV1 is a lie concocted by big youtube to trick you into not using HEVC. Open your eyes, sheeple.
+  - av1meup2
+    - ~~A poorly maintained mod of hevcmeup2 for av1 instead of hevc~~ A very well maintained analog to hevcmeup2 for SVT-AV1
+    - Protip: AV1 is ~~a lie concocted by big youtube to trick you into not using HEVC. Open your eyes, sheeple.~~ good, actually.
   - cropfinder
-    - Tells you what ffmpeg thinks the crop should be for an input file
+    - Tells you what ffmpeg thinks the crop should be for an input file which is more useful than you think, probably.
   - framedumper
     - Dumps specific frames as PNGs. Uses math and magnets to dump one frame per even time interval based on the number of frames you asked for.
     - Useful for doing comparisons between two versions of a file if you don't want to cherry pick specific frames because you're lazy
@@ -20,7 +20,7 @@ My assorted media manipulation scripts
     - Makes a gif from a video file based on timecodes
     - It's simple and dumb, you have to edit the framerate and the output width by hand because I hate you and myself
   - hevcmeup2
-    - This is the franchise. An extremely overcomplicated script to cajole ffmpeg into transcoding media files to HEVC via libx265
+    - This ~~is~~ was the franchise. An extremely overcomplicated script to cajole ffmpeg into transcoding media files to HEVC via libx265
     - More on this below
   - stripcovers
     - Sometimes there are covers in mkv files and while some people think that's cool, they're wrong, it's dumb
@@ -49,10 +49,9 @@ My assorted media manipulation scripts
     - I hate mkvpropedit syntax so much, I never want to remember it again, so this tool does the things I need to do most often in a TUI manner
     - It only works on mkv files, natch.
   - vmafer
-    - I wanted to be able to run [vmaf](https://github.com/Netflix/vmaf) comparisons for "am I doing this right" reasons, but remembering and typing the command was super tedious. This script is barely a script. Using the original file frame rate, it sets the frame subsample size to one second of frames. It takes two positional arguments, first is the new file, second is the original file. Is that backward, who knows, who cares, I am the one who scripts.
+    - I wanted to be able to run [vmaf](https://github.com/Netflix/vmaf) comparisons for "am I doing this right" reasons, but remembering and typing the command was super tedious. This used to be a dumb script but now it's less dumb, it has help and options and everything.
 
-
-## hevcmeup2
+## hevcmeup2 (and av1meup2, really, they're pretty much functionally identical)
 ### What even is this
 hevcmeup2 is truly the shiniest turd jewel in this shiny turd crown. I transcode a lot of video files into hevc for space saving reasons, specifically into yuv420p10le hevc (yes even SDR files, I do not care about your thoughts on transcoding 8-bit data into 10-bit pixels until you've read all of doom9 and since that will kill any human being, the problem will solve itself). I got very, very tired of hand-massaging ffmpeg command lines so I built my own wrapper to solve my specific problems. It started out quite simple, back before it had a `2` in the name. Now it's a complete bloody nightmare of bash nonsense, just absolute fucking chaos of bashisms. If you can read this whole script and not need to look up a single convoluted bash tricknique, your service to the secret fire has clearly been both lengthy and arduous.
 ### How do I use it
