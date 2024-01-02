@@ -10,12 +10,12 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -o|--output:    file name for output
 --start:        start time for encode (default: unset)
 --duration:     duration of encode (default: unset)
---crf:          crf value (default varies with input res, 1080:30, 720: 35, 480: 40)
+--crf:          crf value (default varies with input res, 2160:22, 1080:26, 720: 30, 480: 34)
 --svt-preset:   SVT-AV1 preset value (default: 7)
 --svt-params:   SVT-AV1 parameters string (default: unset)
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
---oprofile:     output profile [1080, 720, 480]
+--oprofile:     output profile [2160, 1080, 720, 480]
 --vf:           custom videofilter input
 --sdr:          best effort 2020->709 color fix
 --yadif:        deinterlace with yadif 
@@ -159,27 +159,30 @@ fi
 
 if [ ! -z "$OPROFILE" ]; then
     case "${OPROFILE}" in
+        2160)
+            VF="${VF:+${VF},}scale=3840:-1"
+            OP_CRF=22;;
         1080)
             VF="${VF:+${VF},}scale=1920:-1"
-            OP_CRF=30;;
+            OP_CRF=26;;
         900)
             VF="${VF:+${VF},}scale=1600:-1"
-            OP_CRF=32;;
+            OP_CRF=28;;
         810)
             VF="${VF:+${VF},}scale=1440:-1"
-            OP_CRF=34;;
+            OP_CRF=30;;
         720)
             VF="${VF:+${VF},}scale=1280:-1"
-            OP_CRF=35;;
+            OP_CRF=30;;
         480)
             VF="${VF:+${VF},}scale=720:-1"
-            OP_CRF=40;;
+            OP_CRF=34;;
         1440)
             VF="${VF:+${VF},}scale=-1:1080,crop=1440:1080:240:0"
-            OP_CRF=30;;
+            OP_CRF=26;;
         960)
             VF="${VF:+${VF},}scale=-1:720,crop=960:720:160:0"
-            OP_CRF=35;;
+            OP_CRF=30;;
         *)
             echo "Not a recognized output profile name."
             exit 1;;
@@ -189,13 +192,13 @@ if [ ! -z "$OPROFILE" ]; then
     fi
 elif [ -z "$CRF" -a -z "$OPROFILE" ]; then
     if [ "$INPUT_WIDTH" -gt 1920 ]; then
-        CRF=25
+        CRF=22
     elif [ "$INPUT_WIDTH" -gt 1280 ]; then
-        CRF=30
+        CRF=26
     elif [ "$INPUT_WIDTH" -gt 854 ]; then
-        CRF=35
+        CRF=30
     else
-        CRF=40
+        CRF=34
     fi
 fi
 
