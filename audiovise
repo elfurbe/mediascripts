@@ -100,11 +100,13 @@ for TRACK in ${TRACKS}; do
     TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | jq -r '.Channels'`
     TRACK_COMPMODE=`echo "${TRACK}" | base64 --decode | $JQ -r '.Compression_Mode'`
     TRACK_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format'`
+    TRACK_FORMAT_ADDFEAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format_AdditionalFeatures'`
+    [ "$TRACK_FORMAT_ADDFEAT" != "null" ] && TRACK_OBJFORMAT=1 || TRACK_OBJFORMAT=0
     if [ "$TRACK_LAYOUT" = "null" ] && [ "$TRACK_CHANNELS" = "null" ]; then
         TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
         TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
     fi
-    TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
+    TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE},${TRACK_OBJFORMAT}${NL}"
     AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
 done
 IFS="$O_IFS"
@@ -113,7 +115,7 @@ if [ $DEBUG ]; then
     echo
     echo "Input Audio Tracks"
     echo "------------------"
-    echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${AUDIO_TRACK_META}" | column -t -s, -o " | "
+    echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode,ObjFormat${NL}${AUDIO_TRACK_META}" | column -t -s, -o " | "
     echo
 fi
 
@@ -138,9 +140,9 @@ case "${AUDIO}" in
         AUDIO_FLAGS="$AUDIO_FLAGS ${FLAC_FLAGS:0:-1}";;
     opus)
         while read -r i; do
-            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
+            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
             TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
-            if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
+            if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
                 BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                 if [ $BR -eq 0 ]; then
                     case $TRACK_CHANNELS in
@@ -172,9 +174,9 @@ case "${AUDIO}" in
         ;;
     aac)
         while read -r i; do
-            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE<<< $( echo "$i" )
+            IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
             TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
-            if [[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]; then
+            if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
                 BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
                 if [ $BR -eq 0 ]; then
                     case $TRACK_CHANNELS in
