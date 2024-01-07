@@ -287,8 +287,8 @@ if [ $AUDIO ]; then
         TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
         TRACK_COMPMODE=`echo "${TRACK}" | base64 --decode | $JQ -r '.Compression_Mode'`
         TRACK_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format'`
-        TRACK_FORMAT_ADDFEAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format_AdditionalFeatures'`
-        [ "$TRACK_FORMAT_ADDFEAT" != "null" ] && TRACK_OBJFORMAT=1 || TRACK_OBJFORMAT=0
+        TRACK_FORMAT_COMMERCIAL_IFANY=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format_Commercial_IfAny'`
+        [[ "$TRACK_FORMAT_COMMERCIAL_IFANY" =~ Atmos|DTS:X ]] && TRACK_OBJFORMAT=1 || TRACK_OBJFORMAT=0
         if [ "$TRACK_LAYOUT" = "null" ] && [ "$TRACK_CHANNELS" = "null" ]; then
             TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
             TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
