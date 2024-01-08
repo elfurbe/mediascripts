@@ -172,7 +172,8 @@ case "$AFORMAT" in
     opus)   [ -n "$CFORMAT" ] && TRACKNAME="Opus ${CFORMAT}" || NOCFORMAT=1;;
     aac)    [ -n "$CFORMAT" ] && TRACKNAME="AAC ${CFORMAT}" || NOCFORMAT=1;;
     dts)    [ -n "$CFORMAT" ] && TRACKNAME="DTS ${CFORMAT}" || NOCFORMAT=1;;
-    *)      echo "Unrecognized format shorthand, using text as entered, with channel format, if provided"; [ -n "$CFORMAT" ] && TRACKNAME="${AFORMAT} ${CFORMAT}" || TRACKNAME="${AFORMAT}";;
+    "")     TRACKNAME="";; # No value provided, do not need output here, just a no-op
+    *)      echo "Unrecognized format shorthand, text as entered, with channel format, if provided"; [ -n "$CFORMAT" ] && TRACKNAME="${AFORMAT} ${CFORMAT}" || TRACKNAME="${AFORMAT}";;
 esac
 
 if [ $NOCFORMAT ]; then
@@ -195,11 +196,23 @@ MERGEOPTIONS+=(-a ${AUDIO_TRACKS})
 MERGEOPTIONS+=(-s ${SUBTITLE_TRACKS})
 ## the space at the end is important, it unsets the track name entirely
 MERGEOPTIONS+=(--track-name 0:\ )
-MERGEOPTIONS+=(--track-name 1:"${TRACKNAME}")
+[ "$TRACKNAME" != "" ] && MERGEOPTIONS+=(--track-name 1:"${TRACKNAME}")
 MERGEOPTIONS+=(--language 0:eng)
 #MERGEOPTIONS+=(--language 1:en)
+[ $STRIPCOMPAT ] && MERGEOPTIONS+=(-a !2)
 MERGEOPTIONS+=("${INPUT}")
 unset IFS
+
+if [ $DEBUG ]; then
+    echo "COMMANDS:"
+    echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+    [ $STRIPTAGS ] && echo "$MKVPROPEDIT \"${OUTPUT}\" --tags all:\"\" --delete title --edit track:v1 --delete name"
+    read -p "Press y to continue, any other key to exit..." CONFIRM
+    case $CONFIRM in
+        [Yy] ) true;;
+        * ) exit;;
+    esac
+fi
 
 echo "## Merging..."
 echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
@@ -213,7 +226,7 @@ else
 fi
 
 if [ $STRIPTAGS ]; then
-    echo "## Theraputic tag strip"
+    echo "## Theraputic tag strip on output file"
     $MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
     if [ $? -eq 0 ]; then
         echo "## Tags stripped."
@@ -227,24 +240,6 @@ if [ $STRIPTAGS ]; then
         fi
     else
         echo "## Tag stripping error"
-        exit 1
-    fi
-fi
-
-if [ $STRIPCOMPAT ]; then
-    OUTPUT2="${OUTPUT:0: -4}_2.mkv"
-    MERGEOPTIONS=(-o "${OUTPUT2}"
-    -a !2
-    "${OUTPUT}")
-    echo "## Second merge to strip compatibility track"
-    echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
-    $MKVMERGE "${MERGEOPTIONS[@]}"
-    rm "${OUTPUT}"
-    mv "${OUTPUT2}" "${OUTPUT}"
-    if [ $? -eq 0 ]; then
-        echo "## Merge complete."
-    else
-        echo "## merge error"
         exit 1
     fi
 fi
