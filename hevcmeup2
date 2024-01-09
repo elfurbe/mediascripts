@@ -174,7 +174,7 @@ fi
 if [ -z "$CRF" -a -z "$OPROFILE" ]; then
     if [ "$INPUT_WIDTH" -gt 1920 ]; then
         CRF=16
-    if [ "$INPUT_WIDTH" -gt 1280 ]; then
+    elif [ "$INPUT_WIDTH" -gt 1280 ]; then
         CRF=18
     elif [ "$INPUT_WIDTH" -gt 854 ]; then
         CRF=22
