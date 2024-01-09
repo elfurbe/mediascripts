@@ -9,7 +9,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -o|--output:   file name for output
 --start:       start time for encode (default: unset)
 --duration:    duration of encode (default: unset)
---crf:         crf value (default varies with input res, 1080:18, 720: 22, 480: 26)
+--crf:         crf value (default varies with input res, 2160:16, 1080:18, 720: 22, 480: 26)
 --melton:      use Don Melton's trickeration for bitrate control
 --mbitrate:    if using --melton, use this bitrate cap
 --preset:      x265 preset value (default: medium)
@@ -172,6 +172,8 @@ elif [[ "${PRESET}" == "placebo" ]]; then
 fi
 
 if [ -z "$CRF" -a -z "$OPROFILE" ]; then
+    if [ "$INPUT_WIDTH" -gt 1920 ]; then
+        CRF=16
     if [ "$INPUT_WIDTH" -gt 1280 ]; then
         CRF=18
     elif [ "$INPUT_WIDTH" -gt 854 ]; then
