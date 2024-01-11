@@ -27,6 +27,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --square:      convert anamorphic to square pixels which make sense
 --forcelossy:  transcode all audio tracks to selected codec
 --copyhdr:     copy HDR metadata (probably doesn't work, who knows, fuck ffmpeg forever)
+--dovi:        attempt to set parameters that produce Dolby Vision-compatible base-layer output
 
 EOF
 }
@@ -122,6 +123,9 @@ while [ $# -gt 0 ]; do
             shift;;
     --square)
             SQUARE=1
+            shift;;
+    --dovi)
+            DOVI=1
             shift;;
     -h|--help)
             usage
@@ -446,6 +450,14 @@ fi
 
 if [ ! -z "$EXTRA_X265_PARAMS" ]; then
     X265_PARAMS="${X265_PARAMS}:${EXTRA_X265_PARAMS}"
+fi
+
+if [ $DOVI ]; then
+    ## implies copyhdr so we're gonna force it on here just in case
+    COPY_HDR=1
+    ## Probably working with elementary streams in this mode, so we need to set the framerate explicitly
+    FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+    X265_PARAMS="${X265_PARAMS}:level-idc=5.1:high-tier=1:hrd=1:hrd-concat=1:info=1:fps=${FPS}:vbv-bufsize=130000:vbv-maxrate=130000:uhd-bd=1";
 fi
 
 if [ $COPY_HDR ]; then
