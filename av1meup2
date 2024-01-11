@@ -505,7 +505,7 @@ elif [ $NNEDI ]; then
     QUAL="slow"
     ETYPE="a"
     PSCRN="new3"
-    THREADS=6
+    THREADS=16
     VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
 fi
 
