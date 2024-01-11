@@ -558,10 +558,10 @@ fi
 
 if [ $DEBUG ]; then
     echo "COMMANDS:"
-    echo "$STRIPCOVERS \"${INPUT}\""
+    [[ "${INPUT##*.}" = ".mkv" ]] && echo "$STRIPCOVERS \"${INPUT}\""
     echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
-    echo "$STRIPTAGS \"${OUTPUT}\""
-    echo "$ADDSTATS \"${OUTPUT}\""
+    [[ "${OUTPUT##*.}" = ".mkv" ]] && echo "$STRIPTAGS \"${OUTPUT}\""
+    [[ "${OUTPUT##*.}" = ".mkv" ]] && echo "$ADDSTATS \"${OUTPUT}\""
     #exit
     read -p "Press y to encode, any other key to exit..." confirm
     case $confirm in
@@ -570,16 +570,13 @@ if [ $DEBUG ]; then
     esac
 fi
 
-echo "## Stripping covers from input file..."
-echo "$STRIPCOVERS \"${INPUT}\""
-$STRIPCOVERS "${INPUT}"
-## Can't check status on this, if there are no covers in the file, it exits 1
-#if [ $? -eq 0 ]; then
-#    echo "## Covers stripped."
-#else
-#    echo "## error stripping covers."
-#    exit 1
-#fi
+if [[ "${INPUT##*.}" = ".mkv" ]]; then
+    echo "## Stripping covers from input file..."
+    echo "$STRIPCOVERS \"${INPUT}\""
+    $STRIPCOVERS "${INPUT}"
+    # Can't check status on this, if there are no covers in the file, it exits 1
+    [ $? -eq 0 ] && echo "## Covers stripped." || echo "## error stripping covers."
+fi
 
 echo "## Starting encode..."
 echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
@@ -591,22 +588,24 @@ else
     exit 1
 fi
 
-echo "## Stripping tags from \"${OUTPUT}\"..."
-echo "$STRIPTAGS $(printf "%q" "${OUTPUT}")"
-$STRIPTAGS "${OUTPUT}"
-if [ $? -eq 0 ]; then
-    echo "## Tags stripped from \"${OUTPUT}\""
-else
-    echo "## error stripping tags from \"${OUTPUT}\""
-    exit 1
-fi
+if [[ "${OUTPUT##*.}" = ".mkv" ]]; then
+    echo "## Stripping tags from \"${OUTPUT}\"..."
+    echo "$STRIPTAGS $(printf "%q" "${OUTPUT}")"
+    $STRIPTAGS "${OUTPUT}"
+    if [ $? -eq 0 ]; then
+        echo "## Tags stripped from \"${OUTPUT}\""
+    else
+        echo "## error stripping tags from \"${OUTPUT}\""
+        exit 1
+    fi
 
-echo "## Adding stats to \"${OUTPUT}\"..."
-echo "$ADDSTATS $(printf "%q" "${OUTPUT}")"
-$ADDSTATS "${OUTPUT}" 
-if [ $? -eq 0 ]; then 
-    echo "## Stats added to \"${OUTPUT}\""
-else
-    echo "## error adding stats to \"${OUTPUT}\""
-    exit 1
+    echo "## Adding stats to \"${OUTPUT}\"..."
+    echo "$ADDSTATS $(printf "%q" "${OUTPUT}")"
+    $ADDSTATS "${OUTPUT}" 
+    if [ $? -eq 0 ]; then 
+        echo "## Stats added to \"${OUTPUT}\""
+    else
+        echo "## error adding stats to \"${OUTPUT}\""
+        exit 1
+    fi
 fi
