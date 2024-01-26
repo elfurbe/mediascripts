@@ -141,9 +141,9 @@ case "${AUDIO}" in
     opus)
         while read -r i; do
             IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
-            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | ${BC}`
             if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
-                BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                 if [ $BR -eq 0 ]; then
                     case $TRACK_CHANNELS in
                         8|7) BR=704;;
@@ -175,9 +175,9 @@ case "${AUDIO}" in
     aac)
         while read -r i; do
             IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
-            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+            TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | ${BC}`
             if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
-                BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|L\|R~128~g' | tr -s ' ' '+' | bc)
+                BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                 if [ $BR -eq 0 ]; then
                     case $TRACK_CHANNELS in
                         8|7) BR=704;;
