@@ -327,9 +327,9 @@ if [ $AUDIO ]; then
         opus)
             while read -r i; do
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
-                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | ${BC}`
                 if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
-                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|Cs\|L\|Lt\|R\|Rt\|M~128~g' | tr -s ' ' '+' | bc)
+                    BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                     if [ $BR -eq 0 ]; then
                         case $TRACK_CHANNELS in
                             8|7) BR=704;;
@@ -361,9 +361,9 @@ if [ $AUDIO ]; then
         aac)
             while read -r i; do
                 IFS=, read -r TRACK_NUMBER TRACK_CODEC TRACK_BITRATE TRACK_CHANNELS TRACK_LAYOUT TRACK_FORMAT TRACK_COMPMODE TRACK_OBJFORMAT<<< $( echo "$i" )
-                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | bc`
+                TRACK_NUMBER=`echo "$TRACK_NUMBER - 1" | ${BC}`
                 if ([[ $FORCE_LOSSY ]] || [[ "$TRACK_COMPMODE" =~ "Lossless" ]] || [[ "$TRACK_FORMAT" =~ "PCM" ]]) && [ $TRACK_OBJFORMAT -eq 0 ]; then
-                    BR=$(echo "$TRACK_LAYOUT" | sed -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~Cb\|C\|Cs\|L\|Lt\|R\|Rt\|M~128~g' | tr -s ' ' '+' | bc)
+                    BR=$(echo "$TRACK_LAYOUT" | ${SED} -e 's~Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw\|LFE~64~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt~128~g' | ${TR} -s ' ' '+' | ${BC})
                     if [ $BR -eq 0 ]; then
                         BR=576
                     fi
@@ -416,16 +416,16 @@ if [ $COPY_HDR ]; then
     VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
 
     ## Processing up the variables from ffprobe fractions to floats
-    VIDEO_GREEN_X_BC=$(echo "scale=4;$VIDEO_GREEN_X" | bc)
-    VIDEO_GREEN_Y_BC=$(echo "scale=4;$VIDEO_GREEN_Y" | bc)
-    VIDEO_BLUE_X_BC=$(echo "scale=4;$VIDEO_BLUE_X" | bc)
-    VIDEO_BLUE_Y_BC=$(echo "scale=4;$VIDEO_BLUE_Y" | bc)
-    VIDEO_RED_X_BC=$(echo "scale=4;$VIDEO_RED_X" | bc)
-    VIDEO_RED_Y_BC=$(echo "scale=4;$VIDEO_RED_Y" | bc)
-    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_X" | bc)
-    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | bc)
-    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | bc)
-    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | bc)
+    VIDEO_GREEN_X_BC=$(echo "scale=4;$VIDEO_GREEN_X" | ${BC})
+    VIDEO_GREEN_Y_BC=$(echo "scale=4;$VIDEO_GREEN_Y" | ${BC})
+    VIDEO_BLUE_X_BC=$(echo "scale=4;$VIDEO_BLUE_X" | ${BC})
+    VIDEO_BLUE_Y_BC=$(echo "scale=4;$VIDEO_BLUE_Y" | ${BC})
+    VIDEO_RED_X_BC=$(echo "scale=4;$VIDEO_RED_X" | ${BC})
+    VIDEO_RED_Y_BC=$(echo "scale=4;$VIDEO_RED_Y" | ${BC})
+    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_X" | ${BC})
+    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | ${BC})
+    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | ${BC})
+    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | ${BC})
 
     if [ "$VIDEO_COLOR_TRANSFER" = "arib-std-b67" ]; then #HLG
         SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
