@@ -17,6 +17,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -sc|--stripcompat:  strip ac3 compatibility tracks if found
 -fo|--firstonly:    only keep the first audio track
 -s|--striptags:     sometimes input tags sneak into the output, restrip/restat output file
+-nc|--nochapters:   don't include chapters from original
 --debug:            print debugging information
 
 EOF
@@ -80,6 +81,9 @@ while [ $# -gt 0 ]; do
         shift;;
     -s|--striptags)
         STRIPTAGS=1
+        shift;;
+    -nc|--nochapters)
+        NOCHAPTERS=1
         shift;;
     --debug)
         DEBUG=1
@@ -183,6 +187,7 @@ fi
 
 printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
 
+
 IFS=""
 
 ## I'm breaking this up so I can play more games with the order later if I need to
@@ -200,6 +205,7 @@ MERGEOPTIONS+=(--track-name 0:\ )
 MERGEOPTIONS+=(--language 0:eng)
 #MERGEOPTIONS+=(--language 1:en)
 [ $STRIPCOMPAT ] && MERGEOPTIONS+=(-a !2)
+[ $NOCHAPTERS ] && MERGEOPTIONS+=(--no-chapters)
 MERGEOPTIONS+=("${INPUT}")
 unset IFS
 
