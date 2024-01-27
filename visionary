@@ -1,0 +1,136 @@
+#!/bin/bash
+
+usage() {
+cat - <<EOF
+Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
+
+-h|--help:          show this help message
+-i|--input:         file name for input
+-o|--output:        base file name for one million artifacts
+-k|--keep:          keep artifacts
+--debug:            print debugging information
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    OPT="$1"
+    case "${OPT}" in
+    -i|--input)
+        shift
+        INPUT="${1}"
+        shift;;
+    -o|--output)
+        shift
+        OUTPUT="${1}"
+        shift;;
+    -k|--keep)
+        KEEP=1
+        shift;;
+    --debug)
+        DEBUG=1
+        shift;;
+    -h|--help)
+        usage
+        exit;;
+    *)
+        echo "$0: invalid option ${1}"
+        usage
+        exit 1;;
+    esac
+done
+
+# Check for tool dependencies
+SELF_FULLPATH=`realpath $0`
+SELF_DIR=`dirname $SELF_FULLPATH`
+# Override default tool list
+TOOLS=(mkvmerge mkvpropedit mkvextract mediainfo grep sed awk dovi_tool dvesverifier ts)
+# Does not depend on any other scripts
+SCRIPTS=(hevcmeup2)
+if [ ! -r $SELF_DIR/toolchecker ]; then
+    echo "toolchecker not found."
+    exit 1
+else
+    . $SELF_DIR/toolchecker
+fi
+
+if [ -z "${INPUT}" ]; then
+    echo "No input file provided."
+    usage
+    exit 1
+fi
+
+if [ -z "${OUTPUT}" ]; then
+    echo "No output base file name provided."
+    usage
+    exit 1
+fi
+
+[ $DEBUG ] && set -x
+## extract the original hevc elementary stream
+SOURCE="${OUTPUT}.hevc"
+$MKVEXTRACT "${INPUT}" tracks 0:${SOURCE}
+
+## figure out what kind of dovi stream we're dealing with
+DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
+case "$DVSTRING" in
+    "dvhe.07.06")
+        ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
+        [ $DEBUG ] && echo "FEL-type profile 7"
+
+        ## demux the layers
+        [ $DEBUG ] && echo "Demuxing layers"
+        BL="${OUTPUT}.BL.hevc"
+        EL="${OUTPUT}.EL.hevc"
+        $DOVI_TOOL demux --input ${SOURCE} --bl-out ${BL} --el-out ${EL}
+
+        ## extract the original RPU from the EL
+        ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
+        #[ $DEBUG ] && echo "Extracting RPU"
+        #RPU="${OUTPUT}.RPU.bin"
+        #$DOVI_TOOL extract-rpu --input ${EL} --rpu-out ${RPU}
+        
+        ## extract and convert the profile 7 RPU to a profile 8.1 RPU
+        [ $DEBUG ] && echo "Extracting RPU in 8.1 format"
+        RPU_81="${OUTPUT}.RPU_81.bin"
+        $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81}
+        ;;
+    "dvhe.08.06")
+        ## create a clean BL and convert the RPU to 8.1 format
+        [ $DEBUG ] && echo "MEL-type profile 8"
+
+        ## create stripped base layer
+        [ $DEBUG ] && echo "Creating stripped base layer"
+        BL="${OUTPUT}.BL.hevc"
+        $DOVI_TOOL remove --input ${SOURCE} --output ${BL}
+
+        ## extract the RPU
+        [ $DEBUG ] && echo "Extracting RPU"
+        RPU_81="${OUTPUT}.RPU_81.bin"
+        $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81}
+        ;;
+    *) echo "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
+esac
+
+## fire the encode job into the queue
+[ $DEBUG ] && echo "Adding encode job"
+COOKED="${OUTPUT}.BL.x265.hevc"
+ENCODE_JOB=$($TS $HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl)
+
+## fire the inject job into the queue waiting on the encode job
+[ $DEBUG ] && echo "Adding inject job"
+COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
+INJECT_JOB=$($TS -W ${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu ${RPU_81} --output ${COOKED_WITH_RPU})
+
+## fire the dolby verifier job into the queue waiting on the inject job
+[ $DEBUG ] && echo "Adding verify job"
+VERIFY_JOB=$($TS -W ${INJECT_JOB} $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --progress --verbose 1)
+
+## fire the remux job into the queue waiting on the verify job
+[ $DEBUG ] && echo "Adding remux job"
+REMUXED="${OUTPUT}.mkv"
+$TS -W ${VERIFY_JOB} $MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
+
+[ $KEEP ] || rm ${SOURCE} ${BL} ${EL} ${RPU_81}
+
+[ $DEBUG ] && set +x
