@@ -120,7 +120,7 @@ ENCODE_JOB=$($TS $HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl)
 ## fire the inject job into the queue waiting on the encode job
 [ $DEBUG ] && echo "Adding inject job"
 COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
-INJECT_JOB=$($TS -W ${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu ${RPU_81} --output ${COOKED_WITH_RPU})
+INJECT_JOB=$($TS -W ${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU})
 
 ## fire the dolby verifier job into the queue waiting on the inject job
 [ $DEBUG ] && echo "Adding verify job"
