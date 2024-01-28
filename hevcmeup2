@@ -255,7 +255,7 @@ VIDEO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | selec
 IFS=$'\n'
 for TRACK in ${VIDEO_TRACKS}; do
     TRACK_HDR_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format'`
-    if [[ -n "$TRACK_HDR_FORMAT" ]]; then
+    if [[ "$TRACK_HDR_FORMAT" != "null" ]]; then
         [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
         [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && echo "Dolby Vision detected. Note that preserving Dolby Vision is beyond the scope of this script."
         if [ $SDR ]; then
