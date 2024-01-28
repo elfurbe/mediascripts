@@ -28,7 +28,6 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --audio:        transcode audio tracks to selected codec [flac, opus, aac]
 --square:       convert anamorphic to square pixels which make sense
 --forcelossy:  transcode all audio tracks to selected codec
---copyhdr:     copy HDR metadata (probably doesn't work, who knows, fuck ffmpeg forever)
 
 EOF
 }
@@ -212,6 +211,24 @@ case "${BITDEPTH}" in
         echo "Bitdepth ${BITDEPTH} is invalid."
         exit 1;;
 esac
+
+VIDEO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
+IFS=$'\n'
+for TRACK in ${VIDEO_TRACKS}; do
+    TRACK_HDR_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format'`
+    if [[ -n "$TRACK_HDR_FORMAT" ]]; then
+        [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
+        [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && echo "Dolby Vision detected. Note that Dolby Vision is not currently possible to encode in AV1. Output will be HDR10 compatible."
+        if [ $SDR ]; then
+            #tonemap=tonemap=mobius:desat=0
+            #VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv${VF:+,${VF}}"
+            VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=full${VF:+,${VF}}"
+        else
+            COPY_HDR=1
+        fi
+    fi
+done
+IFS="$O_IFS"
 
 if [ $CROP ]; then
     echo "## Finding crop..."
@@ -404,56 +421,47 @@ else
     SVTAV1_PARAMS="tune=0"
 fi
 
-## Let's detect HDR automatically and try to do  what we can do
-NL=$'\n'
-VIDEO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
-IFS=$'\n'
-for TRACK in ${VIDEO_TRACKS}; do
-    TRACK_HDR_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format'`
-    if [[ -n "$TRACK_HDR_FORMAT" ]]; then
-        [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
-        [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && echo "Dolby Vision detected. Note that Dolby Vision is not currently possible to encode in AV1. Output will be HDR10 compatible."
-        ## REFERENCES
-        # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
-        ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-        eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
+if [ $COPY_HDR ]; then
+    ## REFERENCES
+    # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
+    ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
+    eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
 
-        VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
+    VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
 
-        ## Processing up the variables from ffprobe fractions to floats
-        VIDEO_GREEN_X_BC=$(echo "scale=4;$VIDEO_GREEN_X" | ${BC})
-        VIDEO_GREEN_Y_BC=$(echo "scale=4;$VIDEO_GREEN_Y" | ${BC})
-        VIDEO_BLUE_X_BC=$(echo "scale=4;$VIDEO_BLUE_X" | ${BC})
-        VIDEO_BLUE_Y_BC=$(echo "scale=4;$VIDEO_BLUE_Y" | ${BC})
-        VIDEO_RED_X_BC=$(echo "scale=4;$VIDEO_RED_X" | ${BC})
-        VIDEO_RED_Y_BC=$(echo "scale=4;$VIDEO_RED_Y" | ${BC})
-        VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_X" | ${BC})
-        VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | ${BC})
-        VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | ${BC})
-        VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | ${BC})
+    ## Processing up the variables from ffprobe fractions to floats
+    VIDEO_GREEN_X_BC=$(echo "scale=4;$VIDEO_GREEN_X" | ${BC})
+    VIDEO_GREEN_Y_BC=$(echo "scale=4;$VIDEO_GREEN_Y" | ${BC})
+    VIDEO_BLUE_X_BC=$(echo "scale=4;$VIDEO_BLUE_X" | ${BC})
+    VIDEO_BLUE_Y_BC=$(echo "scale=4;$VIDEO_BLUE_Y" | ${BC})
+    VIDEO_RED_X_BC=$(echo "scale=4;$VIDEO_RED_X" | ${BC})
+    VIDEO_RED_Y_BC=$(echo "scale=4;$VIDEO_RED_Y" | ${BC})
+    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_X" | ${BC})
+    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;$VIDEO_WHITE_POINT_Y" | ${BC})
+    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | ${BC})
+    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | ${BC})
 
-        if [ "$VIDEO_COLOR_TRANSFER" = "arib-std-b67" ]; then #HLG
-            SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
-        elif [ "$VIDEO_COLOR_TRANSFER" = "smpte2084" ]; then #HDR10
-            SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}"
-            SVTAV1_PARAMS="${SVTAV1_PARAMS}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
-            SVTAV1_PARAMS="${SVTAV1_PARAMS}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
+    if [ "$VIDEO_COLOR_TRANSFER" = "arib-std-b67" ]; then #HLG
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
+    elif [ "$VIDEO_COLOR_TRANSFER" = "smpte2084" ]; then #HDR10
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:color-primaries=${VIDEO_COLOR_PRIMARIES}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
 
-            GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
-            BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
-            RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
-            WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
-            LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
-            CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
-            
-            SVTAV1_PARAMS="${SVTAV1_PARAMS}:mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}"
-        else
-            echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
-            echo "Bailing out."
-            exit 1
-        fi
+        GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+        BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+        RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+        WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+        LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+        CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+        
+        SVTAV1_PARAMS="${SVTAV1_PARAMS}:mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}"
+    else
+        echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
+        echo "Bailing out."
+        exit 1
     fi
-done
+fi
 
 VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${SVT_PRESET} -g ${G} -crf ${CRF} -svtav1-params ${SVTAV1_PARAMS}"
 
@@ -468,19 +476,6 @@ fi
 
 if [ ! -z "$START" ]; then
     FFMPEG="$FFMPEG -ss $START"
-fi
-
-if [ $SDR ]; then
-    for TRACK in ${VIDEO_TRACKS}; do
-        TRACK_HDR_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format'`
-        #tonemap=tonemap=mobius:desat=0
-        #VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv${VF:+,${VF}}"
-        if [[ -n "$TRACK_HDR_FORMAT" ]]; then 
-            VF="zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=full${VF:+,${VF}}"
-        else
-            echo "Video is not HDR, ignoring"
-        fi
-    done
 fi
 
 SCANTYPE=`$MEDIAINFO "$INPUT" | grep "Scan type " | awk -F:\  '{print $2}'`
