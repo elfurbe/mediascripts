@@ -1,10 +1,8 @@
 #!/bin/bash
 
-
 # Check for tool dependencies
 
 ## External tools
-
 [ -z "$TOOLS" ] && TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq bc tr sed grep awk)
 
 for tool in ${TOOLS[@]}; do
@@ -29,7 +27,6 @@ done
 
 
 ## Utility scripts from this toolkit
-
 [ -z "$SCRIPTS" ] && SCRIPTS=(cropfinder stripcovers striptags addstats)
 
 for script in ${SCRIPTS[@]}; do
@@ -47,5 +44,8 @@ for script in ${SCRIPTS[@]}; do
     fi
     [ $DEBUG ] && echo "$VAR: ${!VAR}"
 done
+
+## Save a copy of the IFS because I abuse it fucking constantly
+O_IFS="${IFS}"
 
 [ $DEBUG ] && echo
