@@ -44,7 +44,7 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list
-TOOLS=(mkvmerge mkvpropedit mkvextract mediainfo grep sed awk dovi_tool dvesverifier ts)
+TOOLS=(mkvmerge mkvpropedit mkvextract mediainfo grep sed awk dovi_tool dvesverifier)
 # Does not depend on any other scripts
 SCRIPTS=(hevcmeup2)
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -67,12 +67,14 @@ if [ -z "${OUTPUT}" ]; then
 fi
 
 [ $DEBUG ] && set -x
+
+## figure out what kind of dovi stream we're dealing with
+DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
+
 ## extract the original hevc elementary stream
 SOURCE="${OUTPUT}.hevc"
 $MKVEXTRACT "${INPUT}" tracks 0:${SOURCE}
 
-## figure out what kind of dovi stream we're dealing with
-DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
 case "$DVSTRING" in
     "dvhe.07.06")
         ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
@@ -112,24 +114,20 @@ case "$DVSTRING" in
     *) echo "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
 esac
 
-## fire the encode job into the queue
-[ $DEBUG ] && echo "Adding encode job"
+[ $DEBUG ] && echo "Starting encode..."
 COOKED="${OUTPUT}.BL.x265.hevc"
-ENCODE_JOB=$($TS $HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl)
+$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl
 
-## fire the inject job into the queue waiting on the encode job
-[ $DEBUG ] && echo "Adding inject job"
+[ $DEBUG ] && echo "Injecting rpu..."
 COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
-INJECT_JOB=$($TS -W ${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU})
+${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU}
 
-## fire the dolby verifier job into the queue waiting on the inject job
 [ $DEBUG ] && echo "Adding verify job"
-VERIFY_JOB=$($TS -W ${INJECT_JOB} $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --progress --verbose 1)
+$DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --progress --verbose 1
 
-## fire the remux job into the queue waiting on the verify job
 [ $DEBUG ] && echo "Adding remux job"
 REMUXED="${OUTPUT}.mkv"
-$TS -W ${VERIFY_JOB} $MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
+$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
 
 [ $KEEP ] || rm ${SOURCE} ${BL} ${EL} ${RPU_81}
 
