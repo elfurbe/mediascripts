@@ -66,25 +66,31 @@ if [ -z "${OUTPUT}" ]; then
     exit 1
 fi
 
-[ $DEBUG ] && set -x
-
 ## figure out what kind of dovi stream we're dealing with
 DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
+echo ">> Dolby Vision type: $DVSTRING"; echo
 
-## extract the original hevc elementary stream
+echo ">> Extracting original hevc elementary stream"; echo
 SOURCE="${OUTPUT}.hevc"
+set -x
 $MKVEXTRACT "${INPUT}" tracks 0:${SOURCE}
+{ set +x; } 2>/dev/null
+echo
 
 case "$DVSTRING" in
     "dvhe.07.06")
         ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
         [ $DEBUG ] && echo "FEL-type profile 7"
+        [ $DEBUG ] && echo "Cannot preserve EL through transcoding, will convert RPU to 8.1 format"
 
         ## demux the layers
-        [ $DEBUG ] && echo "Demuxing layers"
+        echo ">> Demuxing layers"; echo
         BL="${OUTPUT}.BL.hevc"
         EL="${OUTPUT}.EL.hevc"
+        set -x
         $DOVI_TOOL demux --input ${SOURCE} --bl-out ${BL} --el-out ${EL}
+        { set +x; } 2>/dev/null
+        echo
 
         ## extract the original RPU from the EL
         ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
@@ -93,42 +99,68 @@ case "$DVSTRING" in
         #$DOVI_TOOL extract-rpu --input ${EL} --rpu-out ${RPU}
         
         ## extract and convert the profile 7 RPU to a profile 8.1 RPU
-        [ $DEBUG ] && echo "Extracting RPU in 8.1 format"
+        echo ">> Extracting RPU in 8.1 format"; echo
         RPU_81="${OUTPUT}.RPU_81.bin"
+        set -x
         $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81}
+        { set +x; } 2>/dev/null
+        echo
         ;;
     "dvhe.08.06")
         ## create a clean BL and convert the RPU to 8.1 format
         [ $DEBUG ] && echo "MEL-type profile 8"
 
         ## create stripped base layer
-        [ $DEBUG ] && echo "Creating stripped base layer"
+        echo ">> Creating stripped base layer"; echo
         BL="${OUTPUT}.BL.hevc"
+        set -x
         $DOVI_TOOL remove --input ${SOURCE} --output ${BL}
+        { set +x; } 2>/dev/null
+        echo
 
         ## extract the RPU
-        [ $DEBUG ] && echo "Extracting RPU"
+        echo ">> Extracting RPU"; echo
         RPU_81="${OUTPUT}.RPU_81.bin"
+        set -x
         $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81}
+        { set +x; } 2>/dev/null
+        echo
         ;;
     *) echo "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
 esac
 
-[ $DEBUG ] && echo "Starting encode..."
+echo ">> Starting encode..."; echo
 COOKED="${OUTPUT}.BL.x265.hevc"
+set -x
 $HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl
+{ set +x; } 2>/dev/null
+echo
 
-[ $DEBUG ] && echo "Injecting rpu..."
+echo ">> Injecting RPU into transcoded BL..."; echo
 COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
-${ENCODE_JOB} $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU}
+set -x
+$DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU}
+{ set +x; } 2>/dev/null
+echo
 
-[ $DEBUG ] && echo "Adding verify job"
+echo ">> Running Dolby Vision stream verifier"; echo
+set -x
 $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --progress --verbose 1
+{ set +x; } 2>/dev/null
+echo
 
-[ $DEBUG ] && echo "Adding remux job"
+echo ">> Remuxing transcoded video with all other tracks from input source..."; echo
 REMUXED="${OUTPUT}.mkv"
+set -x
 $MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
+{ set +x; } 2>/dev/null
+echo
 
-[ $KEEP ] || rm ${SOURCE} ${BL} ${EL} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU}
-
-[ $DEBUG ] && set +x
+if [ $KEEP ]; then
+    echo ">> Preserving intermediate files"
+else
+    echo ">> Removing intermediaate files..."; echo
+    set -x
+    rm ${SOURCE} ${BL} ${EL} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU}
+    { set +x; } 2>/dev/null
+fi
