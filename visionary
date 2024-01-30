@@ -129,6 +129,6 @@ $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.
 REMUXED="${OUTPUT}.mkv"
 $MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
 
-[ $KEEP ] || rm ${SOURCE} ${BL} ${EL} ${RPU_81}
+[ $KEEP ] || rm ${SOURCE} ${BL} ${EL} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU}
 
 [ $DEBUG ] && set +x
