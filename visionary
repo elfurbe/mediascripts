@@ -6,11 +6,17 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 
 -h|--help:          show this help message
 -i|--input:         file name for input
--o|--output:        base file name for one million artifacts
+-o|--output:        base file name for one million artifacts, do not include file extension
 -k|--keep:          keep artifacts
+-v|--verify:        verify stream with Dolby Vision toolkit, default disabled
 --debug:            print debugging information
 
 EOF
+}
+
+fail() {
+    printf '%s\n' "$1" >&2 ## Send message to stderr.
+    exit "${2-1}" ## Return a code specified by $2, or 1 by default.
 }
 
 while [ $# -gt 0 ]; do
@@ -27,16 +33,16 @@ while [ $# -gt 0 ]; do
     -k|--keep)
         KEEP=1
         shift;;
+    -v|--verify)
+        VERIFY=1
+        shift;;
     --debug)
         DEBUG=1
         shift;;
     -h|--help)
         usage
         exit;;
-    *)
-        echo "$0: invalid option ${1}"
-        usage
-        exit 1;;
+    *) fail "$0: invalid option ${1}";;
     esac
 done
 
@@ -44,8 +50,9 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list
-TOOLS=(mkvmerge mkvpropedit mkvextract mediainfo grep sed awk dovi_tool dvesverifier)
-# Does not depend on any other scripts
+TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool)
+[ $VERIFY ] && TOOLS+=(dvesverifier)
+# Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
@@ -66,6 +73,29 @@ if [ -z "${OUTPUT}" ]; then
     exit 1
 fi
 
+## build assorted artifact filenames and make sure they don't exist
+## not all of these are used in all cases
+## but I don't want to think about it very hard
+## 
+SOURCE="${OUTPUT}.hevc"
+[ -f "${SOURCE}" ] && fail "Source HEVC file already exists: ${SOURCE}"
+BL="${OUTPUT}.BL.hevc"
+[ -f "${BL}" ] && fail "Base-layer file already exists: ${BL}"
+EL="${OUTPUT}.EL.hevc"
+[ -f "${EL}" ] && fail "Enhancement-layer file already exists: ${EL}"
+RPU="${OUTPUT}.RPU.bin"
+[ -f "${RPU}" ] && fail "RPU file already exists: ${RPU}"
+RPU_81="${OUTPUT}.RPU_81.bin"
+[ -f "${RPU_81}" ] && fail "8.1-compatible RPU file already exists: ${RPU_81}"
+COOKED="${OUTPUT}.BL.x265.hevc"
+[ -f "${COOKED}" ] && fail "Transcoding destination file already exists: ${COOKED}"
+COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
+[ -f "${COOKED_WITH_RPU}" ] && fail "Transcoded file with RPU injection already exists: ${COOKED_WITH_RPU}"
+REMUXED="${OUTPUT}.mkv"
+[ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
+
+echo ">> Starting Dolby Vision-aware transcode"
+
 ## figure out what kind of dovi stream we're dealing with
 DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
 echo ">> Dolby Vision type: $DVSTRING"; echo
@@ -73,7 +103,7 @@ echo ">> Dolby Vision type: $DVSTRING"; echo
 echo ">> Extracting original hevc elementary stream"; echo
 SOURCE="${OUTPUT}.hevc"
 set -x
-$MKVEXTRACT "${INPUT}" tracks 0:${SOURCE}
+$MKVEXTRACT "${INPUT}" tracks 0:${SOURCE} || fail "extraction failed"
 { set +x; } 2>/dev/null
 echo
 
@@ -85,24 +115,20 @@ case "$DVSTRING" in
 
         ## demux the layers
         echo ">> Demuxing layers"; echo
-        BL="${OUTPUT}.BL.hevc"
-        EL="${OUTPUT}.EL.hevc"
         set -x
-        $DOVI_TOOL demux --input ${SOURCE} --bl-out ${BL} --el-out ${EL}
+        $DOVI_TOOL demux --input ${SOURCE} --bl-out ${BL} --el-out ${EL} || fail "Demuxing failed."
         { set +x; } 2>/dev/null
         echo
 
         ## extract the original RPU from the EL
         ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
         #[ $DEBUG ] && echo "Extracting RPU"
-        #RPU="${OUTPUT}.RPU.bin"
         #$DOVI_TOOL extract-rpu --input ${EL} --rpu-out ${RPU}
         
         ## extract and convert the profile 7 RPU to a profile 8.1 RPU
         echo ">> Extracting RPU in 8.1 format"; echo
-        RPU_81="${OUTPUT}.RPU_81.bin"
         set -x
-        $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81}
+        $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81} || fail "RPU extraction failed."
         { set +x; } 2>/dev/null
         echo
         ;;
@@ -112,55 +138,59 @@ case "$DVSTRING" in
 
         ## create stripped base layer
         echo ">> Creating stripped base layer"; echo
-        BL="${OUTPUT}.BL.hevc"
         set -x
-        $DOVI_TOOL remove --input ${SOURCE} --output ${BL}
+        $DOVI_TOOL remove --input ${SOURCE} --output ${BL} || fail "Stripping base layer failed."
         { set +x; } 2>/dev/null
         echo
 
         ## extract the RPU
         echo ">> Extracting RPU"; echo
-        RPU_81="${OUTPUT}.RPU_81.bin"
         set -x
-        $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81}
+        $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81} || fail "RPU extraction failed."
         { set +x; } 2>/dev/null
         echo
         ;;
-    *) echo "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
+    *) fail "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
 esac
 
 echo ">> Starting encode..."; echo
-COOKED="${OUTPUT}.BL.x265.hevc"
 set -x
-$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl
+$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl || fail "Encode failed."
 { set +x; } 2>/dev/null
 echo
 
 echo ">> Injecting RPU into transcoded BL..."; echo
-COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
 set -x
-$DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU}
+$DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
 { set +x; } 2>/dev/null
 echo
 
-echo ">> Running Dolby Vision stream verifier"; echo
-set -x
-$DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --progress --verbose 1
-{ set +x; } 2>/dev/null
-echo
+if [ $VERIFY ]; then
+    echo ">> Running Dolby Vision stream verifier"; echo
+    set -x
+    $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --verbose 1 || fail "Dolby Vision verification failed."
+    { set +x; } 2>/dev/null
+    echo
+fi
 
 echo ">> Remuxing transcoded video with all other tracks from input source..."; echo
-REMUXED="${OUTPUT}.mkv"
 set -x
-$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT}
+$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT} || fail "Remuxing failed."
 { set +x; } 2>/dev/null
 echo
 
 if [ $KEEP ]; then
     echo ">> Preserving intermediate files"
 else
-    echo ">> Removing intermediaate files..."; echo
-    set -x
-    rm ${SOURCE} ${BL} ${EL} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU}
-    { set +x; } 2>/dev/null
+    echo ">> Removing intermediate files..."; echo
+    CLEANUP=(${SOURCE} ${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU})
+    for FILE in ${CLEANUP[@]}; do
+        if [ -f "${FILE}" ]; then
+            set -x
+            rm ${FILE}
+            { set +x; } 2>/dev/null
+        fi
+    done
 fi
+
+echo ">> Complete"
