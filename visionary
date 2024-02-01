@@ -9,6 +9,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -o|--output:        base file name for one million artifacts, do not include file extension
 -k|--keep:          keep artifacts
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
+-c|--crf:           set an alternate crf
 --debug:            print debugging information
 
 EOF
@@ -35,6 +36,10 @@ while [ $# -gt 0 ]; do
         shift;;
     -v|--verify)
         VERIFY=1
+        shift;;
+    -c|--crf)
+        shift
+        CRF="${1}"
         shift;;
     --debug)
         DEBUG=1
@@ -76,7 +81,6 @@ fi
 ## build assorted artifact filenames and make sure they don't exist
 ## not all of these are used in all cases
 ## but I don't want to think about it very hard
-## 
 SOURCE="${OUTPUT}.hevc"
 [ -f "${SOURCE}" ] && fail "Source HEVC file already exists: ${SOURCE}"
 BL="${OUTPUT}.BL.hevc"
@@ -155,7 +159,7 @@ esac
 
 echo ">> Starting encode..."; echo
 set -x
-$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl || fail "Encode failed."
+$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl ${CRF:+"--crf $CRF"} || fail "Encode failed."
 { set +x; } 2>/dev/null
 echo
 
