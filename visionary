@@ -63,7 +63,7 @@ SELF_DIR=`dirname $SELF_FULLPATH`
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool)
 [ $VERIFY ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
-SCRIPTS=(hevcmeup2 audiovise)
+SCRIPTS=(hevcmeup2 audiovise striptags stripcovers)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -187,6 +187,8 @@ if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
     OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
     set -x
     $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
+    $STRIPCOVERS ${OTHERTRACKS}
+    $STRIPTAGS ${OTHERTRACKS}
     { set +x; } 2>/dev/null
     echo
 elif [[ "${AUDIO}" ]] ; then
