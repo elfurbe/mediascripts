@@ -159,7 +159,7 @@ esac
 
 echo ">> Starting encode..."; echo
 set -x
-$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl ${CRF:+"--crf $CRF"} || fail "Encode failed."
+$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
 { set +x; } 2>/dev/null
 echo
 
