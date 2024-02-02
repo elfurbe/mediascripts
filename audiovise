@@ -13,7 +13,7 @@ Usage: $NAME -i <INPUT FILE> -o <OUTPUT FILE>
 --aac:          transcode all lossless tracks to AAC
 --vorbis:       transcode all lossless tracks to Vorbis
 --pcmtoflac:    transcode PCM to FLAC, touch nothing else
---audioonly:    only output audio data
+--novideo:      strip the video track
 --forcelossy:   transcode all tracks, even lossy
 
 EOF
@@ -46,8 +46,8 @@ while [ $# -gt 0 ]; do
     --pcmtoflac)
             CODEC=pcmtoflac
             shift;;
-    --audioonly)
-            AUDIOONLY=1
+    --novideo)
+            NOVIDEO=1
             shift;;
     --forcelossy)
             FORCE_LOSSY=1
@@ -211,12 +211,11 @@ case "${AUDIO}" in
         exit 1;;
 esac
 
-if [ $AUDIOONLY ]; then
-    DEFAULT_FLAGS="-map 0 -map -0:d -map -0:v -map -0:s ${AUDIO_FLAGS} -max_muxing_queue_size 9999"
+if [ $NOVIDEO ]; then
+    DEFAULT_FLAGS="-map 0 -map -0:d -map -0:v ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
 else
     DEFAULT_FLAGS="-map 0 -map -0:d -c:v copy ${AUDIO_FLAGS} -c:s copy -max_muxing_queue_size 9999"
 fi
-
 
 if [ $DEBUG ]; then
     echo "COMMANDS:"
