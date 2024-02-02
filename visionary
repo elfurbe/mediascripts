@@ -185,7 +185,10 @@ fi
 if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
     echo ">> Transcoding source audio to ${AUDIO}..."
     OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
-    $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideoa;;
+    set -x
+    $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
+    { set +x; } 2>/dev/null
+    echo
 elif [[ "${AUDIO}" ]] ; then
     echo ">> Audio codec \"${AUDIO}\" not recognized, ignoring"
     OTHERTRACKS="${INPUT}"
