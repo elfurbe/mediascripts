@@ -10,6 +10,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -k|--keep:          keep artifacts
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
 -c|--crf:           set an alternate crf
+-a|--audio:         transcode source audio to specified codec (opus, aac, flac)
 --debug:            print debugging information
 
 EOF
@@ -41,6 +42,10 @@ while [ $# -gt 0 ]; do
         shift
         CRF="${1}"
         shift;;
+    -a|--audio)
+        shift
+        AUDIO="${1}"
+        shift;;
     --debug)
         DEBUG=1
         shift;;
@@ -58,7 +63,7 @@ SELF_DIR=`dirname $SELF_FULLPATH`
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool)
 [ $VERIFY ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
-SCRIPTS=(hevcmeup2)
+SCRIPTS=(hevcmeup2 audiovise)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -177,9 +182,20 @@ if [ $VERIFY ]; then
     echo
 fi
 
-echo ">> Remuxing transcoded video with all other tracks from input source..."; echo
+if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
+    echo ">> Transcoding source audio to ${AUDIO}..."
+    OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
+    $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideoa;;
+elif [[ "${AUDIO}" ]] ; then
+    echo ">> Audio codec \"${AUDIO}\" not recognized, ignoring"
+    OTHERTRACKS="${INPUT}"
+else
+    OTHERTRACKS="${INPUT}"
+fi
+
+echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${INPUT} || fail "Remuxing failed."
+$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${OTHERTRACKS} || fail "Merge failed."
 { set +x; } 2>/dev/null
 echo
 
@@ -188,6 +204,7 @@ if [ $KEEP ]; then
 else
     echo ">> Removing intermediate files..."; echo
     CLEANUP=(${SOURCE} ${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU})
+    [[ "${OTHERTRACKS}" != "${INPUT}" ]] && CLEANUP+=(${OTHERTRACKS})
     for FILE in ${CLEANUP[@]}; do
         if [ -f "${FILE}" ]; then
             set -x
