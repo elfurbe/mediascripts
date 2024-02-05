@@ -60,7 +60,7 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list
-TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool)
+TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq)
 [ $VERIFY ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2 audiovise striptags stripcovers)
@@ -90,12 +90,16 @@ SOURCE="${OUTPUT}.hevc"
 [ -f "${SOURCE}" ] && fail "Source HEVC file already exists: ${SOURCE}"
 BL="${OUTPUT}.BL.hevc"
 [ -f "${BL}" ] && fail "Base-layer file already exists: ${BL}"
+BL10P="${OUTPUT}.BL10P.hevc"
+[ -f "${BL10P}" ] && fail "HDR10+ base layer already exists: ${BL10P}"
 EL="${OUTPUT}.EL.hevc"
 [ -f "${EL}" ] && fail "Enhancement-layer file already exists: ${EL}"
 RPU="${OUTPUT}.RPU.bin"
 [ -f "${RPU}" ] && fail "RPU file already exists: ${RPU}"
 RPU_81="${OUTPUT}.RPU_81.bin"
 [ -f "${RPU_81}" ] && fail "8.1-compatible RPU file already exists: ${RPU_81}"
+HDR10P="${OUTPUT}.hdr10p.json"
+[ -f "${HDR10P}" ] && fail "HDR10+ JSON file already exists: ${HDR10P}"
 COOKED="${OUTPUT}.BL.x265.hevc"
 [ -f "${COOKED}" ] && fail "Transcoding destination file already exists: ${COOKED}"
 COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
@@ -103,11 +107,20 @@ COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
 REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
-echo ">> Starting Dolby Vision-aware transcode"
+echo ">> Starting Dolby Vision-aware transcode"; echo
 
-## figure out what kind of dovi stream we're dealing with
-DVSTRING=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}' | $AWK -F,\  '{print $3}')
-echo ">> Dolby Vision type: $DVSTRING"; echo
+#HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
+TRACK=$($MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64')
+HDRFORMAT=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format')
+[[ "$HDRFORMAT" =~ "Dolby" ]] || fail "not a dolby vision file"
+## figure out what sort of dovi stream we're dealing with
+DOVIPROFILE=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Profile' | $AWK '{print $1}')
+DOVILEVEL=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Level' | $AWK '{print $1}')
+FORMATCOMPAT=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Compatibility' | $AWK -F\ /\  '{print $2}' | $AWK '{print $1}')
+
+echo ">> Dolby Vision profile: $DOVIPROFILE"
+echo ">> Dolby Vision level: $DOVILEVEL"
+echo ">> Base layer compatibility: $FORMATCOMPAT"; echo
 
 echo ">> Extracting original hevc elementary stream"; echo
 SOURCE="${OUTPUT}.hevc"
@@ -116,8 +129,8 @@ $MKVEXTRACT "${INPUT}" tracks 0:${SOURCE} || fail "extraction failed"
 { set +x; } 2>/dev/null
 echo
 
-case "$DVSTRING" in
-    "dvhe.07.06")
+case "$DOVIPROFILE" in
+    "dvhe.07")
         ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
         [ $DEBUG ] && echo "FEL-type profile 7"
         [ $DEBUG ] && echo "Cannot preserve EL through transcoding, will convert RPU to 8.1 format"
@@ -140,8 +153,17 @@ case "$DVSTRING" in
         $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81} || fail "RPU extraction failed."
         { set +x; } 2>/dev/null
         echo
+
+        ## if there's hdr10+ metadata, we gon save that too
+        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
+            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            set -x
+            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            { set +x; } 2>/dev/null
+            echo
+        fi
         ;;
-    "dvhe.08.06")
+    "dvhe.08")
         ## create a clean BL and convert the RPU to 8.1 format
         [ $DEBUG ] && echo "MEL-type profile 8"
 
@@ -158,8 +180,17 @@ case "$DVSTRING" in
         $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81} || fail "RPU extraction failed."
         { set +x; } 2>/dev/null
         echo
+
+        ## if there's hdr10+ metadata, we gon save that too
+        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
+            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            set -x
+            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            { set +x; } 2>/dev/null
+            echo
+        fi
         ;;
-    *) fail "Unrecognized Dolby Vision identifier: ${DVSTRING}";;
+    *) fail "Unrecognized Dolby Vision identifier: ${DOVIPROFILE}";;
 esac
 
 echo ">> Starting encode..."; echo
@@ -168,11 +199,25 @@ $HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl ${CRF:+--crf $CRF} || fail
 { set +x; } 2>/dev/null
 echo
 
-echo ">> Injecting RPU into transcoded BL..."; echo
-set -x
-$DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
-{ set +x; } 2>/dev/null
-echo
+## if there's hdr10+ metadata, we gon deal with it <puts on glasses>
+if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
+    echo ">> Injecting HDR10+ metadata into base layer..."; echo
+    set -x
+    $HDR10PLUS_TOOL inject -i ${COOKED} -j ${HDR10P} -o ${BL10P} || fail "HDR10+ injection failed."
+    { set +x; } 2>/dev/null
+    echo
+    echo ">> Injecting RPU into transcoded HDR10+ injected BL..."; echo
+    set -x
+    $DOVI_TOOL inject-rpu --input ${BL10P} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
+    { set +x; } 2>/dev/null
+    echo
+else
+    echo ">> Injecting RPU into transcoded BL..."; echo
+    set -x
+    $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
+    { set +x; } 2>/dev/null
+    echo
+fi
 
 if [ $VERIFY ]; then
     echo ">> Running Dolby Vision stream verifier"; echo
