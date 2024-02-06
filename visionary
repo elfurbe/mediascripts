@@ -253,7 +253,7 @@ if [ $KEEP ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
-    CLEANUP=(${SOURCE} ${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU})
+    CLEANUP=(${SOURCE} ${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU} ${HDR10P} ${BL10P})
     [[ "${OTHERTRACKS}" != "${INPUT}" ]] && CLEANUP+=(${OTHERTRACKS})
     for FILE in ${CLEANUP[@]}; do
         if [ -f "${FILE}" ]; then
