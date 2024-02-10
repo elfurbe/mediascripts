@@ -83,11 +83,20 @@ if [ -z "${OUTPUT}" ]; then
     exit 1
 fi
 
+echo ">> Starting Dolby Vision-aware transcode"; echo
+
+## this makes 'for crf in 16 18 20 22; do visionary -i A.Movie.mkv -o movie --crf $crf; done'
+## work so much easier that I don't care if it makes sense to anyone else
+if [ -n "${CRF}" ]; then
+    OUTPUT="${OUTPUT}_${CRF}"
+    echo ">> Appending crf value to output filenames: ${OUTPUT}"
+fi
+
 ## build assorted artifact filenames and make sure they don't exist
 ## not all of these are used in all cases
 ## but I don't want to think about it very hard
-SOURCE="${OUTPUT}.hevc"
-[ -f "${SOURCE}" ] && fail "Source HEVC file already exists: ${SOURCE}"
+FIFO="${OUTPUT}.fifo"
+[ -p "${FIFO}" ] && fail "Named pipe already exists: ${FIFO}"
 BL="${OUTPUT}.BL.hevc"
 [ -f "${BL}" ] && fail "Base-layer file already exists: ${BL}"
 BL10P="${OUTPUT}.BL10P.hevc"
@@ -107,8 +116,6 @@ COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
 REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
-echo ">> Starting Dolby Vision-aware transcode"; echo
-
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
 TRACK=$($MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64')
 HDRFORMAT=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format')
@@ -122,10 +129,9 @@ echo ">> Dolby Vision profile: $DOVIPROFILE"
 echo ">> Dolby Vision level: $DOVILEVEL"
 echo ">> Base layer compatibility: $FORMATCOMPAT"; echo
 
-echo ">> Extracting original hevc elementary stream"; echo
-SOURCE="${OUTPUT}.hevc"
+echo ">> Making named pipe"; echo
 set -x
-$MKVEXTRACT "${INPUT}" tracks 0:${SOURCE} || fail "extraction failed"
+mkfifo ${FIFO}
 { set +x; } 2>/dev/null
 echo
 
@@ -138,7 +144,8 @@ case "$DOVIPROFILE" in
         ## demux the layers
         echo ">> Demuxing layers"; echo
         set -x
-        $DOVI_TOOL demux --input ${SOURCE} --bl-out ${BL} --el-out ${EL} || fail "Demuxing failed."
+        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
+        $DOVI_TOOL demux --bl-out "${BL}" --el-out "${EL}" - <${FIFO}  || fail "Demuxing failed."
         { set +x; } 2>/dev/null
         echo
 
@@ -170,14 +177,16 @@ case "$DOVIPROFILE" in
         ## create stripped base layer
         echo ">> Creating stripped base layer"; echo
         set -x
-        $DOVI_TOOL remove --input ${SOURCE} --output ${BL} || fail "Stripping base layer failed."
+        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
+        $DOVI_TOOL remove --output "${BL}" - <${FIFO} || fail "Base layer stripping failed."
         { set +x; } 2>/dev/null
         echo
 
         ## extract the RPU
         echo ">> Extracting RPU"; echo
         set -x
-        $DOVI_TOOL extract-rpu --input ${SOURCE} --rpu-out ${RPU_81} || fail "RPU extraction failed."
+        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
+        $DOVI_TOOL extract-rpu --rpu-out "${RPU_81}" - <${FIFO} || fail "RPU extraction failed."
         { set +x; } 2>/dev/null
         echo
 
@@ -222,7 +231,7 @@ fi
 if [ $VERIFY ]; then
     echo ">> Running Dolby Vision stream verifier"; echo
     set -x
-    $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level 6 --verbose 1 || fail "Dolby Vision verification failed."
+    $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level ${DOVILEVEL#0} --verbose 1 || fail "Dolby Vision verification failed."
     { set +x; } 2>/dev/null
     echo
 fi
@@ -232,8 +241,6 @@ if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
     OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
     set -x
     $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
-    $STRIPCOVERS ${OTHERTRACKS}
-    $STRIPTAGS ${OTHERTRACKS}
     { set +x; } 2>/dev/null
     echo
 elif [[ "${AUDIO}" ]] ; then
@@ -242,6 +249,13 @@ elif [[ "${AUDIO}" ]] ; then
 else
     OTHERTRACKS="${INPUT}"
 fi
+
+echo ">> Stripping nonsense before remux..."
+set -x
+$STRIPCOVERS ${OTHERTRACKS}
+$STRIPTAGS ${OTHERTRACKS}
+{ set +x; } 2>/dev/null
+echo
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
@@ -253,7 +267,7 @@ if [ $KEEP ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
-    CLEANUP=(${SOURCE} ${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU} ${HDR10P} ${BL10P})
+    CLEANUP=(${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU} ${HDR10P} ${BL10P})
     [[ "${OTHERTRACKS}" != "${INPUT}" ]] && CLEANUP+=(${OTHERTRACKS})
     for FILE in ${CLEANUP[@]}; do
         if [ -f "${FILE}" ]; then
@@ -263,5 +277,11 @@ else
         fi
     done
 fi
+echo
 
+echo ">> Removing fifo..."; echo
+set -x
+rm ${FIFO}
+{ set +x; } 2>/dev/null
+echo
 echo ">> Complete"
