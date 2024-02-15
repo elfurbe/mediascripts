@@ -259,7 +259,7 @@ echo
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-$MKVMERGE --output ${OUTPUT}.mkv ${COOKED_WITH_RPU} --no-video ${OTHERTRACKS} || fail "Merge failed."
+$MKVMERGE --output "${OUTPUT}.mkv" "${COOKED_WITH_RPU}" --no-video "${OTHERTRACKS}" || fail "Merge failed."
 { set +x; } 2>/dev/null
 echo
 
