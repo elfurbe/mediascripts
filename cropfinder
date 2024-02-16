@@ -46,10 +46,10 @@ while [ $# -gt 0 ]; do
 done
 
 # Check for tool dependencies
-SELF_FULLPATH=`realpath $0`
-SELF_DIR=`dirname $SELF_FULLPATH`
-# Override default tool list, we only need these two
-TOOLS=(ffmpeg ffprobe)
+SELF_FULLPATH=$(realpath $0)
+SELF_DIR=$(dirname $SELF_FULLPATH)
+# Override default tool list
+TOOLS=(ffmpeg ffprobe grep awk sort uniq head tail)
 # Does not depend on any other scripts
 SCRIPTS=NONE
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -79,7 +79,7 @@ else
     SAMPLES=10
 fi
 
-DUR=`$FFPROBE "$INPUT" 2>&1 | grep -e DURATION -e Duration | head -n1 | awk -F': ' '{print $2}' | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | awk -F. '{print $1}'`
+DUR=$($FFPROBE "$INPUT" 2>&1 | $GREP -e DURATION -e Duration | $HEAD -n1 | $AWK -F': ' '{print $2}' | $AWK -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | $AWK -F. '{print $1}')
 [ $DEBUG ] && echo "Duration: $DUR"
 DUR_TRIM=$((DUR - 600))
 SPLIT=$(($DUR_TRIM / $SAMPLES))
@@ -87,11 +87,11 @@ SPLIT=$(($DUR_TRIM / $SAMPLES))
 #CROPDETECT="cropdetect=24:16:0"
 CROPDETECT="cropdetect=.1:16:0"
 ALL_CROPS=""
-for i in `seq 1 $SAMPLES`; do
+for i in $(seq 1 $SAMPLES); do
     START=$(($SPLIT * ${i}))
-    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 |  grep -o crop=.* | sort | uniq -c | sort -n | tail -n1 | awk '{print $2}')
+    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 |  $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
     [ $DEBUG ] && echo -e "Segment start: $START\t$CROP"
     ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
 done
-CROP=`echo "$ALL_CROPS" | sort -t "=" -k 2 | uniq -c | sort -n | tail -n1 | awk '{print $2}'`
+CROP=$(echo "$ALL_CROPS" | $SORT -t "=" -k 2 | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
 echo "$CROP"
