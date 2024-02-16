@@ -18,6 +18,8 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -fo|--firstonly:    only keep the first audio track
 -s|--striptags:     sometimes input tags sneak into the output, restrip/restat output file
 -nc|--nochapters:   don't include chapters from original
+-ka|--keepattach:   keep attachments (useful for subtitle fonts)
+--tracknames:       a list like '<track num>:"<name string>",<track num>:"<name string>"'
 --debug:            print debugging information
 
 EOF
@@ -85,6 +87,13 @@ while [ $# -gt 0 ]; do
     -nc|--nochapters)
         NOCHAPTERS=1
         shift;;
+    -ka|--keepattach)
+        KEEPATTACH=1
+        shift;;
+    --tracknames)
+        shift
+        TRACKNAMES="$1"
+        shift;;
     --debug)
         DEBUG=1
         shift;;
@@ -107,6 +116,11 @@ fi
 
 if [ -z "$AFORMAT" ]; then
     echo "Not updating primary audio track title."
+fi
+
+if [ -n "$TRACKNAMES" ] && [ -n "$AFORMAT" ]; then
+    echo "Can't do both tracknames and aformat cause I'm lazy, pick one, try again"
+    exit 1
 fi
 
 if [ -z "$OUTPUT_DIR" ] && [ -n "$OUTPUT" ]; then
@@ -193,8 +207,8 @@ IFS=""
 ## I'm breaking this up so I can play more games with the order later if I need to
 MERGEOPTIONS=()
 MERGEOPTIONS+=(-o "${OUTPUT}")
-MERGEOPTIONS+=(--no-attachments
---no-track-tags
+[ $KEEPATTACH ] || MERGEOPTIONS+=(--no-attachments)
+MERGEOPTIONS+=(--no-track-tags
 --no-global-tags
 --no-buttons)
 MERGEOPTIONS+=(-a ${AUDIO_TRACKS})
@@ -202,6 +216,13 @@ MERGEOPTIONS+=(-s ${SUBTITLE_TRACKS})
 ## the space at the end is important, it unsets the track name entirely
 MERGEOPTIONS+=(--track-name 0:\ )
 [ "$TRACKNAME" != "" ] && MERGEOPTIONS+=(--track-name 1:"${TRACKNAME}")
+if [ -n "$TRACKNAMES" ]; then
+    IFS=$'\n'
+    for ITEM in $(echo "$TRACKNAMES" | tr ',' '\n'); do
+        MERGEOPTIONS+=(--track-name ${ITEM})
+    done
+    IFS=""
+fi
 MERGEOPTIONS+=(--language 0:eng)
 #MERGEOPTIONS+=(--language 1:en)
 [ $STRIPCOMPAT ] && MERGEOPTIONS+=(-a !2)
