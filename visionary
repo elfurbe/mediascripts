@@ -136,6 +136,36 @@ mkfifo ${FIFO}
 echo
 
 case "$DOVIPROFILE" in
+    "dvhe.05")
+        ## create a clean BL and convert the RPU to 8.1 format
+        [ $DEBUG ] && echo "MEL-type profile 5"
+        echo ">> NOTE: Profile 5 uses non-standard IPT-PQ-C2 colorspace in BL. Colors will not be properly rendered on playback devices that do not support Dolby Vision."
+
+        ## create stripped base layer
+        echo ">> Creating stripped base layer"; echo
+        set -x
+        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
+        $DOVI_TOOL remove --output "${BL}" - <${FIFO} || fail "Base layer stripping failed."
+        { set +x; } 2>/dev/null
+        echo
+
+        ## extract the RPU
+        echo ">> Extracting RPU"; echo
+        set -x
+        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
+        $DOVI_TOOL --mode 3 extract-rpu --rpu-out "${RPU_81}" - <${FIFO} || fail "RPU extraction failed."
+        { set +x; } 2>/dev/null
+        echo
+
+        ## if there's hdr10+ metadata, we gon save that too
+        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
+            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            set -x
+            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            { set +x; } 2>/dev/null
+            echo
+        fi
+        ;;
     "dvhe.07")
         ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
         [ $DEBUG ] && echo "FEL-type profile 7"
@@ -199,8 +229,22 @@ case "$DOVIPROFILE" in
             echo
         fi
         ;;
-    *) fail "Unrecognized Dolby Vision identifier: ${DOVIPROFILE}";;
+    *) 
+        ## not gonna need that fifo after all I guess
+        echo ">> Cleaning up named pipe"; echo
+        set -x
+        rm ${FIFO}
+        { set +x; } 2>/dev/null
+        echo
+        fail "Unrecognized Dolby Vision identifier: ${DOVIPROFILE}";;
 esac
+        
+## we're done with the fifo
+echo ">> Cleaning up named pipe"; echo
+set -x
+rm ${FIFO}
+{ set +x; } 2>/dev/null
+echo
 
 echo ">> Starting encode..."; echo
 set -x
@@ -279,9 +323,4 @@ else
 fi
 echo
 
-echo ">> Removing fifo..."; echo
-set -x
-rm ${FIFO}
-{ set +x; } 2>/dev/null
-echo
 echo ">> Complete"
