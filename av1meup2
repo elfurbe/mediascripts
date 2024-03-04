@@ -568,8 +568,8 @@ $STRIPCOVERS "${INPUT}"
 #fi
 
 echo "## Starting encode..."
-echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
-nice -n 5 $FFMPEG -analyzeduration 25M -probesize 25M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
+echo "nice -n 5 $FFMPEG -analyzeduration 100M -probesize 100M -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+nice -n 5 $FFMPEG -analyzeduration 100M -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
 if [ $? -eq 0 ]; then
     echo "## encode complete."
 else
