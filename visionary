@@ -60,7 +60,7 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list
-TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq)
+TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64)
 [ $VERIFY ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2 audiovise striptags stripcovers)
@@ -118,12 +118,12 @@ REMUXED="${OUTPUT}.mkv"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
 TRACK=$($MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64')
-HDRFORMAT=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format')
+HDRFORMAT=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format')
 [[ "$HDRFORMAT" =~ "Dolby" ]] || fail "not a dolby vision file"
 ## figure out what sort of dovi stream we're dealing with
-DOVIPROFILE=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Profile' | $AWK '{print $1}')
-DOVILEVEL=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Level' | $AWK '{print $1}')
-FORMATCOMPAT=$(echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format_Compatibility' | $AWK -F\ /\  '{print $2}' | $AWK '{print $1}')
+DOVIPROFILE=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Profile' | $AWK '{print $1}')
+DOVILEVEL=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Level' | $AWK '{print $1}')
+FORMATCOMPAT=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Compatibility' | $AWK -F\ /\  '{print $2}' | $AWK '{print $1}')
 
 echo ">> Dolby Vision profile: $DOVIPROFILE"
 echo ">> Dolby Vision level: $DOVILEVEL"
@@ -131,7 +131,7 @@ echo ">> Base layer compatibility: $FORMATCOMPAT"; echo
 
 echo ">> Making named pipe"; echo
 set -x
-mkfifo ${FIFO}
+$MKFIFO ${FIFO}
 { set +x; } 2>/dev/null
 echo
 
