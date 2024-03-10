@@ -19,6 +19,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -s|--striptags:     sometimes input tags sneak into the output, restrip/restat output file
 -nc|--nochapters:   don't include chapters from original
 -ka|--keepattach:   keep attachments (useful for subtitle fonts)
+-nm|--nomediainfo:  do not show mediainfo output summary at the end
 --tracknames:       a list like '<track num>:"<name string>",<track num>:"<name string>"'
 --debug:            print debugging information
 
@@ -34,7 +35,7 @@ truncate() {
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list
-TOOLS=(mkvmerge mkvpropedit jq sed awk column)
+TOOLS=(mkvmerge mkvpropedit jq sed awk column mediainfo)
 # Does not depend on any other scripts
 SCRIPTS=NONE
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -89,6 +90,9 @@ while [ $# -gt 0 ]; do
         shift;;
     -ka|--keepattach)
         KEEPATTACH=1
+        shift;;
+    -nm|--nomediainfo)
+        NOMI=1
         shift;;
     --tracknames)
         shift
@@ -270,3 +274,5 @@ if [ $STRIPTAGS ]; then
         exit 1
     fi
 fi
+
+[ $NOMI ] || $MEDIAINFO "${OUTPUT}"
