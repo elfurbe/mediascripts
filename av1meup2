@@ -237,15 +237,17 @@ if [ $CROP ]; then
 
     [ $DEBUG ] && echo "$CFOUTPUT"
     CROP=$(echo "$CFOUTPUT" | tail -n1)
+    [ $DEBUG ] && echo "INPUT_WIDTH: ${INPUT_WIDTH}"
+    [ $DEBUG ] && echo "INPUT_HEIGHT: ${INPUT_HEIGHT}"
     IFS=':' read width height left top <<< "$(echo "$CROP" | ${AWK} -F= '{print $2}')"
     if [ $INPUT_WIDTH -eq $width ] && [ $INPUT_HEIGHT -eq $height ]; then
         echo "## No crop detected"
     else
-        if [ $height -eq 1072 ]; then 
+        if [ $height -eq 1072 ] && [ $INPUT_HEIGHT -ne 1072 ]; then 
             [ $DEBUG ] && echo "The dumb eight pixel height crop, ignoring"
             height=1080
             top=0
-            CROP="crop=$width:1080:$left:0"
+            CROP="crop=$width:$height:$left:$top"
         fi
         if [ $width -ne $INPUT_WIDTH ] && [ $height -ne $INPUT_HEIGHT ]; then
             [ $DEBUG ] && echo "Crop detected in both dimensions, that's not great"
