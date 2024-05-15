@@ -249,6 +249,12 @@ if [ $CROP ]; then
             top=0
             CROP="crop=$width:$height:$left:$top"
         fi
+        if [ $width -eq 1904 ] && [ $INPUT_WIDTH -ne 1904 ]; then 
+            [ $DEBUG ] && echo "The dumb sixteen pixel width crop, ignoring"
+            width=1920
+            left=0
+            CROP="crop=$width:$height:$left:$top"
+        fi
         if [ $width -ne $INPUT_WIDTH ] && [ $height -ne $INPUT_HEIGHT ]; then
             [ $DEBUG ] && echo "Crop detected in both dimensions, that's not great"
             if [ $left -gt $top ]; then
