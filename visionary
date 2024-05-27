@@ -2,7 +2,7 @@
 
 usage() {
 cat - <<EOF
-Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
+Usage: ${0##*/} -i <INPUT FILE>
 
 -h|--help:          show this help message
 -i|--input:         file name for input
@@ -63,7 +63,8 @@ SELF_DIR=`dirname $SELF_FULLPATH`
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64)
 [ $VERIFY ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
-SCRIPTS=(hevcmeup2 audiovise striptags stripcovers)
+SCRIPTS=(hevcmeup2 striptags stripcovers addstats)
+[ $AUDIO ] && SCRIPTS+=(audiovise)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -78,9 +79,10 @@ if [ -z "${INPUT}" ]; then
 fi
 
 if [ -z "${OUTPUT}" ]; then
-    echo "No output base file name provided."
-    usage
-    exit 1
+    echo "No output file base name provided."
+    echo "Building output file base name from input file name..."
+    OUTPUT=$(echo "$INPUT" | sed -e 's/.\(mkv\|mp4\|ts\)/_visionary/g')
+    echo "Output file name base: ${OUTPUT}"
 fi
 
 echo ">> Starting Dolby Vision-aware transcode"; echo
@@ -294,16 +296,12 @@ else
     OTHERTRACKS="${INPUT}"
 fi
 
-echo ">> Stripping nonsense before remux..."
-set -x
-$STRIPCOVERS ${OTHERTRACKS}
-$STRIPTAGS ${OTHERTRACKS}
-{ set +x; } 2>/dev/null
-echo
-
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
 $MKVMERGE --output "${OUTPUT}.mkv" "${COOKED_WITH_RPU}" --no-video "${OTHERTRACKS}" || fail "Merge failed."
+$STRIPTAGS "${OUTPUT}.mkv"
+$STRIPCOVERS "${OUTPUT}.mkv"
+$ADDSTATS "${OUTPUT}.mkv"
 { set +x; } 2>/dev/null
 echo
 
