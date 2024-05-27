@@ -32,9 +32,10 @@ My assorted media manipulation scripts
     - Some tools/people like to stuff notes into the video track title, they can die in a fire
   - thecleaner
     - I'm a 'Murican, a high percentage of my media is from 'Murica in native 'Murican and I don't need other language audio tracks or subtitles
-    - This _very specifically_ keeps _only_ english language tagged audio and subtitle tracks
+    - This _very specifically_ by _default_ keeps _only_ english language tagged audio and subtitle tracks
     - It can also optionally change the title tag of the primary audio track
       - I specifically transcode most audio to opus cause it's the best so that's mostly what it's good at making names for
+    - If you want specific tracks or different languages to be kept, look at the script help, it can do that
   - toolchecker
     - So. You're probably asking yourself why everything requires the toolchecker.
       1. So tired of trying to use these scripts in places and getting rando errors cause the fuckin' tools aren't installed, now I get intentional errors
