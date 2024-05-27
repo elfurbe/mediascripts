@@ -3,7 +3,7 @@
 # Check for tool dependencies
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
-# Override default tool list, we only need these two
+# Override default tool list, we only need the one
 TOOLS=(mkvpropedit)
 # Does not depend on any other scripts
 SCRIPTS=NONE
