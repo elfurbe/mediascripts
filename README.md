@@ -138,9 +138,9 @@ So, if you're not familiar with Dolby Vision at a technical level (why would you
    - Profile 8, "dvhe.08": HEVC standard colorspace BL+RPU format used primarily by streaming video providers and in some cases on UHD BluRay or downloadable media. For profile 8, RPU data is attached to the BL as there is no EL.
    - Profile 10, "dav1.10": AV1 standard colorspace BL+RPU format used primarily by literally no one, it doesn't exist in the real world. For profile 10, RPU data is attached to the BL as there is no EL.
  - Level: Defined by Dolby, _also_ identified by a number (thanks Dolby), specifies video dimensions, frame rates and bitrates. Why wouldn't you simply determine those things by inspecting the video stream, who could say. For UHD/4K streams, you will generally speaking only see a few levels
-  - 06: 4K 24p film content
-  - 07: 4K 30p television content
-  - 09: 4k 60p television content
+   - 06: 4K 24p film content
+   - 07: 4K 30p television content
+   - 09: 4k 60p television content
  - You will most commonly see the profiles and levels annotated like this: "dvhe.08.06". This means: Dolby Vision, HEVC, Profile 08 (BL+RPU) Level 06 (24p).
 
 So let's talk about the EL. Dolby, in their wish to find new and exciting rent-seeking opportunities, had what I assume is a meeting where some version of this conversation happend.
