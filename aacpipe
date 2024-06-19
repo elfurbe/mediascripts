@@ -33,17 +33,19 @@ OUTPUT="$2"
 if [ -z "$3" ]; then
     TRACKNUM=0
 else
-    if [ "$3" -eq "$3" ]; then
-        TRACKNUM=$3
-        MITRACKNUM=`echo $3 + 1 | bc`
-    else
+    case $3 in
+    ''|*[!0-9]*)
         echo "Track number should be a number"
-        exit 1
-    fi
+        exit 1;;
+    *) 
+        TRACKNUM=$3
+        MITRACKNUM=`echo $3 + 1 | bc`;;
+    esac
 fi
 
 NL=$'\n'
 TRACK=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r ".media.track[${MITRACKNUM}] | @base64"`
+TRACK_TYPE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.["@type"]'`
 TRACK_NUMBER=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.StreamOrder'`
 TRACK_CODEC=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.CodecID'`
 TRACK_BITRATE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.BitRate'`
@@ -52,6 +54,12 @@ TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout'`
 TRACK_CHANNELS=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Channels'`
 TRACK_COMPMODE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Compression_Mode'`
 TRACK_FORMAT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Format'`
+
+if [ ! "$TRACK_TYPE" == "Audio" ]; then
+    echo "Track ${TRACKNUM} is not an audio track"
+    exit 1
+fi
+
 TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
 echo
 echo "Input Audio Track"
