@@ -11,18 +11,19 @@ Usage: ${0##*/} -i <INPUT FILE>
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
 -c|--crf:           set an alternate crf
 -a|--audio:         transcode source audio to specified codec (opus, aac, flac)
+--av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --debug:            print debugging information
 
 EOF
 }
 
 fail() {
-    printf '%s\n' "$1" >&2 ## Send message to stderr.
+    printf '%s\n' "${1}" >&2 ## Send message to stderr.
     exit "${2-1}" ## Return a code specified by $2, or 1 by default.
 }
 
 while [ $# -gt 0 ]; do
-    OPT="$1"
+    OPT="${1}"
     case "${OPT}" in
     -i|--input)
         shift
@@ -46,32 +47,37 @@ while [ $# -gt 0 ]; do
         shift
         AUDIO="${1}"
         shift;;
+    --av1)
+        AV1=1
+        shift;;
     --debug)
         DEBUG=1
         shift;;
     -h|--help)
         usage
         exit;;
-    *) fail "$0: invalid option ${1}";;
+    *) fail "${0}: invalid option ${1}";;
     esac
 done
 
 # Check for tool dependencies
-SELF_FULLPATH=`realpath $0`
-SELF_DIR=`dirname $SELF_FULLPATH`
+SELF_FULLPATH=`realpath ${0}`
+SELF_DIR=`dirname ${SELF_FULLPATH}`
 # Override default tool list
-TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64)
-[ $VERIFY ] && TOOLS+=(dvesverifier)
+TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc)
+[ -n "${VERIFY}" ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2 striptags stripcovers addstats)
-[ $AUDIO ] && SCRIPTS+=(audiovise)
-if [ ! -r $SELF_DIR/toolchecker ]; then
+[ -n "${AUDIO}" ] && SCRIPTS+=(audiovise)
+
+if [ ! -r ${SELF_DIR}/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
 else
-    . $SELF_DIR/toolchecker
+    . ${SELF_DIR}/toolchecker
 fi
 
+## validate something was even provided for input
 if [ -z "${INPUT}" ]; then
     echo "No input file provided."
     usage
@@ -81,11 +87,11 @@ fi
 if [ -z "${OUTPUT}" ]; then
     echo "No output file base name provided."
     echo "Building output file base name from input file name..."
-    OUTPUT=$(echo "$INPUT" | sed -e 's/.\(mkv\|mp4\|ts\)/_visionary/g')
+    OUTPUT=$(echo "${INPUT}" | sed -e 's/.\(mkv\|mp4\|ts\)/_visionary/g')
     echo "Output file name base: ${OUTPUT}"
 fi
 
-echo ">> Starting Dolby Vision-aware transcode"; echo
+echo ">> Starting Dolby Vision/HDR10+ transcode"; echo
 
 ## this makes 'for crf in 16 18 20 22; do visionary -i A.Movie.mkv -o movie --crf $crf; done'
 ## work so much easier that I don't care if it makes sense to anyone else
@@ -107,189 +113,273 @@ EL="${OUTPUT}.EL.hevc"
 [ -f "${EL}" ] && fail "Enhancement-layer file already exists: ${EL}"
 RPU="${OUTPUT}.RPU.bin"
 [ -f "${RPU}" ] && fail "RPU file already exists: ${RPU}"
-RPU_81="${OUTPUT}.RPU_81.bin"
-[ -f "${RPU_81}" ] && fail "8.1-compatible RPU file already exists: ${RPU_81}"
+RPU_8="${OUTPUT}.RPU_8.bin"
+[ -f "${RPU_8}" ] && fail "Profile 8-compatible RPU file already exists: ${RPU_8}"
 HDR10P="${OUTPUT}.hdr10p.json"
 [ -f "${HDR10P}" ] && fail "HDR10+ JSON file already exists: ${HDR10P}"
-COOKED="${OUTPUT}.BL.x265.hevc"
-[ -f "${COOKED}" ] && fail "Transcoding destination file already exists: ${COOKED}"
-COOKED_WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
-[ -f "${COOKED_WITH_RPU}" ] && fail "Transcoded file with RPU injection already exists: ${COOKED_WITH_RPU}"
+BLX265="${OUTPUT}.BL.x265.hevc"
+[ -f "${BLX265}" ] && fail "x265 transcoding destination file already exists: ${BLX265}"
+WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
+[ -f "${WITH_RPU}" ] && fail "Transcoded file with RPU injection already exists: ${WITH_RPU}"
 REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
-TRACK=$($MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64')
-HDRFORMAT=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format')
-[[ "$HDRFORMAT" =~ "Dolby" ]] || fail "not a dolby vision file"
-## figure out what sort of dovi stream we're dealing with
-DOVIPROFILE=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Profile' | $AWK '{print $1}')
-DOVILEVEL=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Level' | $AWK '{print $1}')
-FORMATCOMPAT=$(echo "${TRACK}" | $BASE64 --decode | $JQ -r '.HDR_Format_Compatibility' | $AWK -F\ /\  '{print $2}' | $AWK '{print $1}')
+TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
+HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
+FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
+[[ "${HDRFORMAT}" =~ "Dolby" ]] && ISDOVI=1
+[[ "${FORMATCOMPAT}" =~ "HDR10+" ]] && ISHDR10P=1
 
-echo ">> Dolby Vision profile: $DOVIPROFILE"
-echo ">> Dolby Vision level: $DOVILEVEL"
-echo ">> Base layer compatibility: $FORMATCOMPAT"; echo
+if [ -n "${ISDOVI}" ] && [ -n "${ISHDR10P}" ]; then
+    ISBOTH=1
+fi
+
+[ -n "${DEBUG}" ] && echo "HDR_Format: ${HDRFORMAT}"
+[ -n "${DEBUG}" ] && echo "ISDOVI: ${ISDOVI}"
+[ -n "${DEBUG}" ] && echo "HDR_Format_Compat: ${FORMATCOMPAT}"
+[ -n "${DEBUG}" ] && echo "ISHDR01P: ${ISHDR10P}"
+[ -n "${DEBUG}" ] && echo "ISBOTH: ${ISBOTH}"
+
+
+if [ -n "${ISBOTH}" ]; then
+    echo ">> Dolby Vision and HDR10+ metadata present"
+elif [ -n "${ISDOVI}" ]; then
+    echo ">> Dolby Vision metadata present"
+elif [ -n "${ISHDR10P}" ]; then
+    echo ">> HDR10+ metadata present"
+else
+   fail ">> No dynamic metadata present. What are we even doing here, folks?"
+fi
 
 echo ">> Making named pipe"; echo
 set -x
-$MKFIFO ${FIFO}
+${MKFIFO} "${FIFO}"
 { set +x; } 2>/dev/null
 echo
 
-case "$DOVIPROFILE" in
-    "dvhe.05")
-        ## create a clean BL and convert the RPU to 8.1 format
-        [ $DEBUG ] && echo "MEL-type profile 5"
-        echo ">> NOTE: Profile 5 uses non-standard IPT-PQ-C2 colorspace in BL. Colors will not be properly rendered on playback devices that do not support Dolby Vision."
+## Dolby Vision stream prep
+if [ -n "${ISDOVI}" ]; then
+    DOVIPROFILE=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Profile' | ${AWK} '{print $1}')
+    DOVILEVEL=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Level' | ${AWK} '{print $1}')
 
-        ## create stripped base layer
-        echo ">> Creating stripped base layer"; echo
-        set -x
-        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
-        $DOVI_TOOL remove --output "${BL}" - <${FIFO} || fail "Base layer stripping failed."
-        { set +x; } 2>/dev/null
-        echo
+    echo ">> Dolby Vision profile: ${DOVIPROFILE}"
+    echo ">> Dolby Vision level: ${DOVILEVEL}"
+    echo ">> Base layer compatibility: ${FORMATCOMPAT}"; echo
 
-        ## extract the RPU
-        echo ">> Extracting RPU"; echo
-        set -x
-        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
-        $DOVI_TOOL --mode 3 extract-rpu --rpu-out "${RPU_81}" - <${FIFO} || fail "RPU extraction failed."
-        { set +x; } 2>/dev/null
-        echo
+    case "${DOVIPROFILE}" in
+        "dvhe.05")
+            ## create a clean BL and convert the RPU to 8 format
+            [ -n "${DEBUG}" ] && echo "MEL-type profile 5"
+            fail "<> I'm sorry Dave, I cannot currently encode dolby vision profile 5 content."
+            #echo ">> NOTE: Profile 5 uses non-standard IPT-PQ-C2 colorspace in BL. Colors will not be properly rendered on playback devices that do not support Dolby Vision."
 
-        ## if there's hdr10+ metadata, we gon save that too
-        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
-            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            ### create stripped base layer
+            #echo ">> Creating stripped base layer"; echo
+            #set -x
+            #${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+            #${DOVI_TOOL} remove --output "${BL}" - <"${FIFO}" || fail "Base layer stripping failed."
+            #{ set +x; } 2>/dev/null
+            #echo
+
+            ### extract the RPU
+            #echo ">> Extracting RPU"; echo
+            #set -x
+            #${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+            #${DOVI_TOOL} --mode 3 extract-rpu --rpu-out "${RPU_8}" - <"${FIFO}" || fail "RPU extraction failed."
+            #{ set +x; } 2>/dev/null
+            #echo
+            ;;
+        "dvhe.07")
+            ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8-compatible format
+            [ -n "${DEBUG}" ] && echo "FEL-type profile 7"
+            [ -n "${DEBUG}" ] && echo "Cannot preserve EL through transcoding, will convert RPU to MEL-compatible profile 8 format"
+
+            ## demux the layers
+            echo ">> Demuxing layers"; echo
             set -x
-            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+            ${DOVI_TOOL} demux --bl-out "${BL}" --el-out "${EL}" - <"${FIFO}"  || fail "Demuxing failed."
             { set +x; } 2>/dev/null
             echo
-        fi
-        ;;
-    "dvhe.07")
-        ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8.1 format
-        [ $DEBUG ] && echo "FEL-type profile 7"
-        [ $DEBUG ] && echo "Cannot preserve EL through transcoding, will convert RPU to 8.1 format"
 
-        ## demux the layers
-        echo ">> Demuxing layers"; echo
-        set -x
-        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
-        $DOVI_TOOL demux --bl-out "${BL}" --el-out "${EL}" - <${FIFO}  || fail "Demuxing failed."
-        { set +x; } 2>/dev/null
-        echo
-
-        ## extract the original RPU from the EL
-        ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
-        #[ $DEBUG ] && echo "Extracting RPU"
-        #$DOVI_TOOL extract-rpu --input ${EL} --rpu-out ${RPU}
-        
-        ## extract and convert the profile 7 RPU to a profile 8.1 RPU
-        echo ">> Extracting RPU in 8.1 format"; echo
-        set -x
-        $DOVI_TOOL --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_81} || fail "RPU extraction failed."
-        { set +x; } 2>/dev/null
-        echo
-
-        ## if there's hdr10+ metadata, we gon save that too
-        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
-            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            ## extract the original RPU from the EL
+            ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
+            #[ -n "${DEBUG}" ] && echo "Extracting RPU"
+            #${DOVI_TOOL} extract-rpu --input ${EL} --rpu-out ${RPU}
+            
+            ## extract and convert the profile 7 RPU to a profile 8 RPU
+            echo ">> Extracting RPU in profile 8 format"; echo
             set -x
-            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            ${DOVI_TOOL} --mode 2 extract-rpu --input ${EL} --rpu-out ${RPU_8} || fail "RPU extraction failed."
             { set +x; } 2>/dev/null
             echo
-        fi
-        ;;
-    "dvhe.08")
-        ## create a clean BL and convert the RPU to 8.1 format
-        [ $DEBUG ] && echo "MEL-type profile 8"
+            ;;
+        "dvhe.08")
+            ## great news, we're already in profile 8 territory
+            [ -n "${DEBUG}" ] && echo "MEL-type profile 8"
 
-        ## create stripped base layer
-        echo ">> Creating stripped base layer"; echo
-        set -x
-        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
-        $DOVI_TOOL remove --output "${BL}" - <${FIFO} || fail "Base layer stripping failed."
-        { set +x; } 2>/dev/null
-        echo
-
-        ## extract the RPU
-        echo ">> Extracting RPU"; echo
-        set -x
-        $MKVEXTRACT "${INPUT}" tracks 0:${FIFO} &
-        $DOVI_TOOL extract-rpu --rpu-out "${RPU_81}" - <${FIFO} || fail "RPU extraction failed."
-        { set +x; } 2>/dev/null
-        echo
-
-        ## if there's hdr10+ metadata, we gon save that too
-        if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
-            echo ">> HDR10+ base layer detected, preserving HDR10+ metadata"; echo
+            ## create stripped base layer
+            echo ">> Creating stripped base layer"; echo
             set -x
-            $HDR10PLUS_TOOL extract -i ${BL} -o ${HDR10P} || fail "HDR10+ extraction failed."
+            ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+            ${DOVI_TOOL} remove --output "${BL}" - <"${FIFO}" || fail "Base layer stripping failed."
             { set +x; } 2>/dev/null
             echo
-        fi
-        ;;
-    *) 
-        ## not gonna need that fifo after all I guess
-        echo ">> Cleaning up named pipe"; echo
-        set -x
-        rm ${FIFO}
-        { set +x; } 2>/dev/null
-        echo
-        fail "Unrecognized Dolby Vision identifier: ${DOVIPROFILE}";;
-esac
-        
-## we're done with the fifo
-echo ">> Cleaning up named pipe"; echo
-set -x
-rm ${FIFO}
-{ set +x; } 2>/dev/null
-echo
 
-echo ">> Starting encode..."; echo
-set -x
-$HEVCMEUP2 --input ${BL} --output ${COOKED} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
-{ set +x; } 2>/dev/null
-echo
+            ## extract the RPU
+            echo ">> Extracting RPU"; echo
+            set -x
+            ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+            ${DOVI_TOOL} extract-rpu --rpu-out "${RPU_8}" - <"${FIFO}" || fail "RPU extraction failed."
+            { set +x; } 2>/dev/null
+            echo
+            ;;
+        *) 
+            ## not gonna need that fifo after all I guess
+            echo ">> Cleaning up named pipe"; echo
+            set -x
+            rm "${FIFO}"
+            { set +x; } 2>/dev/null
+            echo
+            fail "Unrecognized Dolby Vision identifier: ${DOVIPROFILE}";;
+    esac
+fi
 
-## if there's hdr10+ metadata, we gon deal with it <puts on glasses>
-if [[ "$FORMATCOMPAT" =~ "HDR10+" ]]; then
-    echo ">> Injecting HDR10+ metadata into base layer..."; echo
+## HDR10+ stream prep
+if [ -n "${ISHDR10P}" ]; then
+    if [ ! -f "${BL}" ]; then
+        echo ">> Extracting video stream from input container"; echo
+        ${MKVEXTRACT} "${INPUT}" tracks 0:"${BL}"
+    fi
+    echo ">> Extracting HDR10+ metadata"; echo
     set -x
-    $HDR10PLUS_TOOL inject -i ${COOKED} -j ${HDR10P} -o ${BL10P} || fail "HDR10+ injection failed."
-    { set +x; } 2>/dev/null
-    echo
-    echo ">> Injecting RPU into transcoded HDR10+ injected BL..."; echo
-    set -x
-    $DOVI_TOOL inject-rpu --input ${BL10P} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
-    { set +x; } 2>/dev/null
-    echo
-else
-    echo ">> Injecting RPU into transcoded BL..."; echo
-    set -x
-    $DOVI_TOOL inject-rpu --input ${COOKED} --rpu-in ${RPU_81} --output ${COOKED_WITH_RPU} || fail "RPU injection failed."
+    ${HDR10PLUS_TOOL} extract -o "${HDR10P}" -i "${BL}" || fail "HDR10+ extraction failed."
     { set +x; } 2>/dev/null
     echo
 fi
 
-if [ $VERIFY ]; then
-    echo ">> Running Dolby Vision stream verifier"; echo
-    set -x
-    $DVESVERIFIER --input ${COOKED_WITH_RPU} --rpu-compare ${RPU_81} --dv-profile 8.1 --dv-level ${DOVILEVEL#0} --verbose 1 || fail "Dolby Vision verification failed."
-    { set +x; } 2>/dev/null
-    echo
+## we're done with the fifo
+echo ">> Cleaning up named pipe"; echo
+set -x
+rm "${FIFO}"
+{ set +x; } 2>/dev/null
+echo
+
+## let's cook this sucker
+echo ">> Starting encode..."; echo
+if [ -n "${AV1}" ]; then
+    ## REFERENCES
+    # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
+    ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
+    eval "$(${FFPROBE} -analyzeduration 100M -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g' -e 's/^\(.*\)\ \([A-Z].*\)=\(.*\)$/\1_\2=\3/g')"
+
+    VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
+
+    ## Processing up the variables from ffprobe fractions to floats
+    VIDEO_GREEN_X_BC=$(echo "scale=4;${VIDEO_GREEN_X}" | ${BC})
+    VIDEO_GREEN_Y_BC=$(echo "scale=4;${VIDEO_GREEN_Y}" | ${BC})
+    VIDEO_BLUE_X_BC=$(echo "scale=4;${VIDEO_BLUE_X}" | ${BC})
+    VIDEO_BLUE_Y_BC=$(echo "scale=4;${VIDEO_BLUE_Y}" | ${BC})
+    VIDEO_RED_X_BC=$(echo "scale=4;${VIDEO_RED_X}" | ${BC})
+    VIDEO_RED_Y_BC=$(echo "scale=4;${VIDEO_RED_Y}" | ${BC})
+    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;${VIDEO_WHITE_POINT_X}" | ${BC})
+    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;${VIDEO_WHITE_POINT_Y}" | ${BC})
+    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MAX_LUMINANCE}" | ${BC})
+    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MIN_LUMINANCE}" | ${BC})
+
+    if [ "${VIDEO_COLOR_TRANSFER}" = "arib-std-b67" ]; then #HLG
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES} --transfer-characteristics ${VIDEO_COLOR_TRANSFER} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
+    elif [ "${VIDEO_COLOR_TRANSFER}" = "smpte2084" ]; then #HDR10
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --transfer-characteristics ${VIDEO_COLOR_TRANSFER}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
+
+        GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+        BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+        RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+        WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+        LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+        CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+        
+        SVTAV1_PARAMS="--mastering-display G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}) --content-light ${CLL}"
+    else
+        echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
+        echo "Bailing out."
+        exit 1
+    fi
+    FINALVIDEO="${OUTPUT}.av1.ivf"
+    SVTAV1_PARAMS="--progress 3 -i stdin --preset 7 --input-depth 10 --crf 22 --keyint 240 --tune 3 ${SVTAV1_PARAMS}"
+    if [ -n "${ISBOTH}" ]; then 
+        echo ">> Both DoVi and HDR10+ metadata present"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
+        set -x
+        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        { set +x; } 2>/dev/null
+    elif [ -n "${ISDOVI}" ]; then 
+        echo ">> Only DoVi metadata present"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
+        set -x
+        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        { set +x; } 2>/dev/null
+    elif [ -n "${ISHDR10P}" ]; then  
+        echo ">> Only HDR10+ metadata present"
+        SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
+        set -x
+        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        { set +x; } 2>/dev/null
+    fi
+else
+    if [ -n "${ISDOVI}" ]; then
+        set -x
+        ${HEVCMEUP2} --input ${BL} --output ${BLX265} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
+        { set +x; } 2>/dev/null
+    else
+        set -x
+        ${HEVCMEUP2} --input ${BL} --output ${BLX265} ${CRF:+--crf $CRF} || fail "Encode failed."
+        { set +x; } 2>/dev/null
+    fi
+    COOKED="${BLX265}"
+    ## time to put the sidecars back in the garage
+    ## do HDR10+ injection first, if need be
+    if [ -n "${ISHDR10P}" ]; then
+        echo ">> Injecting HDR10+ metadata into transcoded base layer..."; echo
+        set -x
+        ${HDR10PLUS_TOOL} inject --input ${COOKED} --json ${HDR10P} --output ${BL10P} || fail "HDR10+ injection failed."
+        { set +x; } 2>/dev/null
+        echo
+        COOKED="${BL10P}"
+        FINALVIDEO="${BL10P}"
+    fi
+    ## dovi injection, if need be
+    if [ -n "${ISDOVI}" ]; then
+        echo ">> Injecting RPU into transcoded BL..."; echo
+        set -x
+        ${DOVI_TOOL} inject-rpu --input ${COOKED} --rpu-in ${RPU_8} --output ${WITH_RPU} || fail "RPU injection failed."
+        { set +x; } 2>/dev/null
+        echo
+        ## verify, if requested, you really shouldn't request it tho
+        if [ -n "${VERIFY}" ]; then
+            echo ">> Running Dolby Vision stream verifier"; echo
+            set -x
+            ${DVESVERIFIER} --input ${WITH_RPU} --rpu-compare ${RPU_8} --dv-profile ${DOVIPROFILE#dvhe.0}.${DOVILEVEL#0} --dv-level ${DOVILEVEL#0} --verbose 1 || fail "Dolby Vision verification failed."
+            { set +x; } 2>/dev/null
+            echo
+        fi
+        COOKED="${WITH_RPU}"
+        FINALVIDEO="${WITH_RPU}"
+    fi
 fi
 
 if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
     echo ">> Transcoding source audio to ${AUDIO}..."
     OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
     set -x
-    $AUDIOVISE -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
+    ${AUDIOVISE} -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
     { set +x; } 2>/dev/null
     echo
-elif [[ "${AUDIO}" ]] ; then
+elif [ -n "${AUDIO}" ] ; then
     echo ">> Audio codec \"${AUDIO}\" not recognized, ignoring"
     OTHERTRACKS="${INPUT}"
 else
@@ -298,18 +388,21 @@ fi
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-$MKVMERGE --output "${OUTPUT}.mkv" "${COOKED_WITH_RPU}" --no-video "${OTHERTRACKS}" || fail "Merge failed."
-$STRIPTAGS "${OUTPUT}.mkv"
-$STRIPCOVERS "${OUTPUT}.mkv"
-$ADDSTATS "${OUTPUT}.mkv"
+${MKVMERGE} --output "${REMUXED}" "${FINALVIDEO}" --no-video "${OTHERTRACKS}" || fail "Merge failed."
+{ set +x; } 2>/dev/null
+
+set -x
+${STRIPTAGS} "${OUTPUT}.mkv"
+${STRIPCOVERS} "${OUTPUT}.mkv"
+${ADDSTATS} "${OUTPUT}.mkv"
 { set +x; } 2>/dev/null
 echo
 
-if [ $KEEP ]; then
+if [ -n "${KEEP}" ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
-    CLEANUP=(${BL} ${EL} ${RPU} ${RPU_81} ${COOKED} ${COOKED_WITH_RPU} ${HDR10P} ${BL10P})
+    CLEANUP=(${BL} ${EL} ${RPU} ${RPU_8} ${HDR10P} ${BLX265} ${BL10P} ${WITH_RPU} ${FINALVIDEO})
     [[ "${OTHERTRACKS}" != "${INPUT}" ]] && CLEANUP+=(${OTHERTRACKS})
     for FILE in ${CLEANUP[@]}; do
         if [ -f "${FILE}" ]; then
