@@ -16,7 +16,6 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --tune:        x265 tune value (default: unset)
 --params:      x265 parameters string (default: unset)
 --crop:        enable crop detection (default: no)
---debug:       output commands to be run, run nothing
 --oprofile:    output profile [1080, 720, 480]
 --vf:          custom videofilter input
 --sdr:         best effort 2020->709 color fix
@@ -29,6 +28,8 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --copyhdr:     copy HDR metadata (probably doesn't work, who knows, fuck ffmpeg forever)
 --dovi-bl:     attempt to set parameters that produce Dolby Vision-compatible base-layer output
 --dovi-el:     attempt to set parameters that produce Dolby Vision-compatible enhancement-layer output
+--fps:         for inputs that do not have framerate metadata attach, provide it with this
+--debug:       output commands to be run, run nothing
 
 EOF
 }
@@ -141,6 +142,10 @@ while [ $# -gt 0 ]; do
             shift;;
     --dovi-el)
             DOVIEL=1
+            shift;;
+    --fps)
+            shift
+            FPS="${1}"
             shift;;
     -h|--help)
             usage
@@ -280,7 +285,11 @@ elif [ $DOVIBL ]; then
     ## implies copyhdr so we're gonna force it on here just in case we missed it
     COPY_HDR=1
     ## Probably working with elementary streams in this mode, so we need to set the framerate explicitly
-    FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+    [ $FPS ] || FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+    if [ "${FPS}" == "null" ]; then
+        echo "framerate not provided and could not be determined from input elementary stream."
+        exit 1
+    fi
     paramsmunge "level-idc=5.1:high-tier=1:hrd=1:hrd-concat=1:info=1:fps=${FPS}:vbv-bufsize=85000:vbv-maxrate=85000:uhd-bd=1"
 elif [ $DOVIEL ]; then
     if [ $CROP ]; then
@@ -290,7 +299,11 @@ elif [ $DOVIEL ]; then
     ## implies copyhdr so we're gonna force it on here just in case
     COPY_HDR=1
     ## Probably working with elementary streams in this mode, so we need to set the framerate explicitly
-    FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+    [ $FPS ] || FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+    if [ "${FPS}" == "null" ]; then
+        echo "framerate not provided and could not be determined from input elementary stream."
+        exit 1
+    fi
     paramsmunge "level-idc=5.1:high-tier=1:hrd=1:hrd-concat=1:info=1:fps=${FPS}:vbv-bufsize=10000:vbv-maxrate=10000:uhd-bd=1"
 fi
 
