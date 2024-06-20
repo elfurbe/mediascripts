@@ -26,6 +26,7 @@ Usage: $NAME -e <ENCODED FILE> -s <SOURCE FILE>
 --log-format:   specify vmaf log format (csv, json, xml, or sub, default: csv)
 --model:        override default vmaf model (full path to model json)
 --threads:      specify number of threads (default: no limit)
+--cropped:      encoded file is cropped, so cropdetect the source and filter it
 -d|--debug:     enable debugging output
 
 EOF
@@ -99,6 +100,9 @@ while [ $# -gt 0 ]; do
     --no-motion2)
             NOMOTION2=1
             shift;;
+    --cropped)
+            CROPPED=1
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -114,9 +118,9 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list, we only need these two
-TOOLS=(ffmpeg ffprobe bc mediainfo jq base64)
+TOOLS=(ffmpeg ffprobe bc mediainfo jq base64 awk)
 # Does not depend on any other scripts
-SCRIPTS=NONE
+SCRIPTS=(cropfinder)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -213,7 +217,71 @@ CIEDE="name=ciede"
 
 VMAF_PARAMS="${VMAF_PARAMS}:feature=${VMAF_FEATURES#"|"}"
 
-[ $DEBUG ] && echo
-[ $DEBUG ] && echo "$FFMPEG -i \"${ENCODED}\" -i \"${SOURCE}\" -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf=\"${VMAF_PARAMS}\" -f null -" && sleep 2
-[ $DEBUG ] || $FFMPEG -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi libvmaf="${VMAF_PARAMS}" -f null -
+if [ $CROPPED ]; then
+    echo "The encoded file is cropped, detecting crop for make-a the magic"
+    INPUT="${SOURCE}"
+    INPUT_WIDTH=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Width'`
+    INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Height'`
+    CFOUTPUT=$($CROPFINDER -i "$INPUT" -s 10 -d)
 
+    [ $DEBUG ] && echo "$CFOUTPUT"
+    CROP=$(echo "$CFOUTPUT" | tail -n1)
+    IFS=':' read width height left top <<< "$(echo "$CROP" | ${AWK} -F= '{print $2}')"
+    if [ $INPUT_WIDTH -eq $width ] && [ $INPUT_HEIGHT -eq $height ]; then
+        echo "## No crop detected"
+    else
+        if [ $height -eq 1072 ]; then
+            [ $DEBUG ] && echo "The dumb eight pixel height crop, ignoring"
+            height=1080
+            top=0
+            CROP="crop=$width:1080:$left:0"
+        fi
+        if [ $width -eq 1904 ] && [ $INPUT_WIDTH -ne 1904 ]; then
+            [ $DEBUG ] && echo "The dumb sixteen pixel width crop, ignoring"
+            width=1920
+            left=0
+            CROP="crop=$width:$height:$left:$top"
+        fi
+        if [ $width -ne $INPUT_WIDTH ] && [ $height -ne $INPUT_HEIGHT ]; then
+            [ $DEBUG ] && echo "Crop detected in both dimensions, that's not great"
+            if [ $left -gt $top ]; then
+                [ $DEBUG ] && echo "Maintaining input height ($INPUT_HEIGHT)"
+                if [ $(( $height + 2 * $top )) -ne $INPUT_HEIGHT ]; then
+                    GUTTERS=$(( ($INPUT_HEIGHT - $height) / 2 ))
+                    PAD="pad=$width:$INPUT_HEIGHT:0:$GUTTERS"
+                    CROP="$CROP,$PAD"
+                    [ $DEBUG ] && echo "Evenly padding crop height ($height) back to input height ($INPUT_HEIGHT) with gutters ($GUTTERS)"
+                else
+                    width=$INPUT_WIDTH
+                    CROP="crop=$width:$INPUT_HEIGHT:$left:0"
+                    [ $DEBUG ] && echo "Using original input height ($INPUT_HEIGHT)"
+                fi
+            elif [ $top -gt $left ]; then
+                [ $DEBUG ] && echo "Maintaining input width ($INPUT_WIDTH)"
+                if [ $(( $width + 2 * $left )) -ne $INPUT_WIDTH ]; then
+                    GUTTERS=$(( ($INPUT_WIDTH - $width) / 2 ))
+                    PAD="pad=$INPUT_WIDTH:$height:$GUTTERS:$top"
+                    CROP="$CROP,$PAD"
+                    [ $DEBUG ] && echo "Evenly padding crop width ($width) back to input width ($INPUT_WIDTH) with gutters ($GUTTERS)"
+                else
+                    width=$INPUT_WIDTH
+                    CROP="crop=$INPUT_WIDTH:$height:0:$top"
+                    [ $DEBUG ] && echo "Using original input width ($INPUT_WIDTH)"
+                fi
+            else
+                echo "## Ran out of cropping ideas. Look at this crop with your eyes, type it in with your hands."
+                echo "## This is what cropfinder delivered: ${CROP}"
+                exit 1
+            fi
+        fi
+        if [ $INPUT_WIDTH -eq $width ] && [ $INPUT_HEIGHT -eq $height ]; then
+            echo "## After much consideration, no crop required"
+        else
+            echo "## ${CROP}"
+        fi
+    fi
+fi
+
+[ $DEBUG ] && echo
+[ $DEBUG ] && set -x
+$FFMPEG -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi "[1:v]${CROP}[source];[0:v][source]libvmaf=${VMAF_PARAMS}" -f null -
