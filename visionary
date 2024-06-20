@@ -125,6 +125,7 @@ REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
+FPS=$(${MEDIAINFO} ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
 HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
@@ -220,7 +221,7 @@ if [ -n "${ISDOVI}" ]; then
             [ -n "${DEBUG}" ] && echo "MEL-type profile 8"
 
             ## create stripped base layer
-            echo ">> Creating stripped base layer"; echo
+            echo ">> Creating dovi-free base layer"; echo
             set -x
             ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
             ${DOVI_TOOL} remove --output "${BL}" - <"${FIFO}" || fail "Base layer stripping failed."
@@ -249,14 +250,32 @@ fi
 ## HDR10+ stream prep
 if [ -n "${ISHDR10P}" ]; then
     if [ ! -f "${BL}" ]; then
-        echo ">> Extracting video stream from input container"; echo
-        ${MKVEXTRACT} "${INPUT}" tracks 0:"${BL}"
+        echo ">> Creating HDR10+-free base layer"; echo
+        set -x
+        ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+        ${HDR10PLUS_TOOL} remove --output "${BL}" - <"${FIFO}" || fail "Base layer stripping failed."
+        { set +x; } 2>/dev/null
+        echo
+        echo ">> Extracting HDR10+ metadata"; echo
+        set -x
+        ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
+        ${HDR10PLUS_TOOL} extract -o "${HDR10P}" - <"${FIFO}" || fail "HDR10+ extraction failed."
+        { set +x; } 2>/dev/null
+        echo
+    else
+        echo ">> Extracting HDR10+ metadata from existing base layer ${BL}"; echo
+        set -x
+        ${HDR10PLUS_TOOL} extract -o "${HDR10P}" -i "${BL}" || fail "HDR10+ extraction failed."
+        { set +x; } 2>/dev/null
+        echo
+        echo ">> Removing HDR10+ metadata from existing base layer"; echo
+        set -x
+        ${HDR10PLUS_TOOL} remove -o "${BL%.hevc}.nohdr10p.hevc" -i "${BL}" || fail "HDR10+ extraction failed."
+        rm "${BL}"
+        mv "${BL%.hevc}.nohdr10p.hevc" "${BL}"
+        { set +x; } 2>/dev/null
+        echo
     fi
-    echo ">> Extracting HDR10+ metadata"; echo
-    set -x
-    ${HDR10PLUS_TOOL} extract -o "${HDR10P}" -i "${BL}" || fail "HDR10+ extraction failed."
-    { set +x; } 2>/dev/null
-    echo
 fi
 
 ## we're done with the fifo
@@ -333,7 +352,7 @@ if [ -n "${AV1}" ]; then
 else
     if [ -n "${ISDOVI}" ]; then
         set -x
-        ${HEVCMEUP2} --input ${BL} --output ${BLX265} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
+        ${HEVCMEUP2} --input ${BL} --output ${BLX265} --fps ${FPS} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
         { set +x; } 2>/dev/null
     else
         set -x
