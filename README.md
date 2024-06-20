@@ -92,7 +92,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 
 (seriously, if `${0##*/}` makes sense to you, honest to god you can lay your burden down and go into the west and remain `<your name here>`, you've done enough)
 
-When I run it, which is literally constantly, this is my CPU time, this is typically what it looks like:
+When I run it, which is literally constantly, this is what I do with my CPU time, this is typically what it looks like:
 ```bash
 $ hevcmeup2 -i input_file.mkv -o output_file.mkv --crop --audio opus
 $ av1meup2 -i input_file.mkv -o output_file.mkv --crop --audio opus
