@@ -217,6 +217,8 @@ CIEDE="name=ciede"
 
 VMAF_PARAMS="${VMAF_PARAMS}:feature=${VMAF_FEATURES#"|"}"
 
+[ -n "$THREADS" ] && VMAF_PARAMS="threads=${THREADS}:${VMAF_PARAMS}"
+
 if [ $CROPPED ]; then
     echo "The encoded file is cropped, detecting crop for make-a the magic"
     INPUT="${SOURCE}"
@@ -282,6 +284,11 @@ if [ $CROPPED ]; then
     fi
 fi
 
-[ $DEBUG ] && echo
-[ $DEBUG ] && set -x
-$FFMPEG -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi "[1:v]${CROP}[source];[0:v][source]libvmaf=${VMAF_PARAMS}" -f null -
+if [ $CROP ]; then
+    LAVFI="[1:v]$CROP[source];[0:v][source]libvmaf=${VMAF_PARAMS}"
+else
+    LAVFI="[0:v][1:v]libvmaf=${VMAF_PARAMS}"
+fi
+set -x
+$FFMPEG -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
+{ set +x }; 2>/dev/null
