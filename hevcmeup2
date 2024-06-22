@@ -655,8 +655,9 @@ if [[ "${INPUT##*.}" = ".mkv" ]]; then
 fi
 
 echo "## Starting encode..."
-echo "nice -n 5 $FFMPEG -analyzeduration 100M -probesize 100M -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+set -x
 nice -n 5 $FFMPEG -analyzeduration 100M -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
+{ set +x; } 2>/dev/null
 if [ $? -eq 0 ]; then
     echo "## encode complete."
 else
