@@ -9,7 +9,9 @@ Usage: ${0##*/} -i <INPUT FILE>
 -o|--output:        base file name for one million artifacts, do not include file extension
 -k|--keep:          keep artifacts
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
--c|--crf:           set an alternate crf
+-c|--crf:           set an alternate crf (defaults: x265: 16, svtav1: 22)
+-p|--preset:        set an alternate encoder preset (defaults: x265: medium, svtav1: 7)
+-t|--tune:          set an alternate encoder tune (defaults: x265: none, svtav1: 3)
 -a|--audio:         transcode source audio to specified codec (opus, aac, flac)
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --debug:            print debugging information
@@ -42,6 +44,14 @@ while [ $# -gt 0 ]; do
     -c|--crf)
         shift
         CRF="${1}"
+        shift;;
+    -p|--preset)
+        shift
+        PRESET="${1}"
+        shift;;
+    -t|--tune)
+        shift
+        TUNE="${1}"
         shift;;
     -a|--audio)
         shift
@@ -328,7 +338,7 @@ if [ -n "${AV1}" ]; then
         exit 1
     fi
     FINALVIDEO="${OUTPUT}.av1.ivf"
-    SVTAV1_PARAMS="--progress 3 -i stdin --preset 7 --input-depth 10 --crf 22 --keyint 240 --tune 3 ${SVTAV1_PARAMS}"
+    SVTAV1_PARAMS="--progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
     if [ -n "${ISBOTH}" ]; then 
         echo ">> Both DoVi and HDR10+ metadata present"
         SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
@@ -349,16 +359,12 @@ if [ -n "${AV1}" ]; then
         ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
         { set +x; } 2>/dev/null
     fi
-else
-    if [ -n "${ISDOVI}" ]; then
-        set -x
-        ${HEVCMEUP2} --input ${BL} --output ${BLX265} --fps ${FPS} --dovi-bl ${CRF:+--crf $CRF} || fail "Encode failed."
-        { set +x; } 2>/dev/null
-    else
-        set -x
-        ${HEVCMEUP2} --input ${BL} --output ${BLX265} ${CRF:+--crf $CRF} || fail "Encode failed."
-        { set +x; } 2>/dev/null
-    fi
+else # x265
+    OPTIONS="-input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
+    [ -n "${ISDOVI}" ] && OPTIONS="$OPTIONS --dovi-bl"
+    set -x
+    ${HEVCMEUP2} ${OPTIONS} || fail "Encode failed."
+    { set +x; } 2>/dev/null
     COOKED="${BLX265}"
     ## time to put the sidecars back in the garage
     ## do HDR10+ injection first, if need be
