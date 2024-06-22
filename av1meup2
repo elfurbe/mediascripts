@@ -585,7 +585,7 @@ fi
 
 echo "## Starting encode..."
 set -x
-nice -n 5 $FFMPEG -analyzeduration 100M -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
+nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
 { set +x; } 2>/dev/null
 if [ $? -eq 0 ]; then
     echo "## encode complete."
