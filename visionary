@@ -360,7 +360,7 @@ if [ -n "${AV1}" ]; then
         { set +x; } 2>/dev/null
     fi
 else # x265
-    OPTIONS="-input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
+    OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
     [ -n "${ISDOVI}" ] && OPTIONS="$OPTIONS --dovi-bl"
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "Encode failed."
