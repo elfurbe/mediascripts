@@ -16,7 +16,6 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 -st|--stracks:      comma separated list of subtitle track numbers to keep
 -sc|--stripcompat:  strip ac3 compatibility tracks if found
 -fo|--firstonly:    only keep the first audio track
--s|--striptags:     sometimes input tags sneak into the output, restrip/restat output file
 -nc|--nochapters:   don't include chapters from original
 -ka|--keepattach:   keep attachments (useful for subtitle fonts)
 -nm|--nomediainfo:  do not show mediainfo output summary at the end
@@ -81,9 +80,6 @@ while [ $# -gt 0 ]; do
         shift;;
     -fo|--firstonly)
         FIRSTONLY=1
-        shift;;
-    -s|--striptags)
-        STRIPTAGS=1
         shift;;
     -nc|--nochapters)
         NOCHAPTERS=1
@@ -237,7 +233,6 @@ unset IFS
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
-    [ $STRIPTAGS ] && echo "$MKVPROPEDIT \"${OUTPUT}\" --tags all:\"\" --delete title --edit track:v1 --delete name"
     read -p "Press y to continue, any other key to exit..." CONFIRM
     case $CONFIRM in
         [Yy] ) true;;
@@ -246,8 +241,9 @@ if [ $DEBUG ]; then
 fi
 
 echo "## Merging..."
-echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+set -x
 $MKVMERGE "${MERGEOPTIONS[@]}"
+{ set +x; } 2>/dev/null
 
 if [ $? -eq 0 ]; then
     echo "## Merge complete."
@@ -256,23 +252,25 @@ else
     exit 1
 fi
 
-if [ $STRIPTAGS ]; then
-    echo "## Theraputic tag strip on output file"
-    $MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
+echo "## Theraputic tag strip on output file"
+set -x
+$MKVPROPEDIT "${OUTPUT}" --tags all:"" --delete title --edit track:v1 --delete name
+{ set +x; } 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "## Tags stripped."
+    echo "## Adding back stats"
+    set -x
+    $MKVPROPEDIT --add-track-statistics-tags "${OUTPUT}"
+    { set +x; } 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo "## Tags stripped."
-        echo "## Adding back stats"
-        $MKVPROPEDIT --add-track-statistics-tags "${OUTPUT}"
-        if [ $? -eq 0 ]; then
-            echo "## Stats added"
-        else
-            echo "## Stats adding error"
-            exit 1
-        fi
+        echo "## Stats added"
     else
-        echo "## Tag stripping error"
+        echo "## Stats adding error"
         exit 1
     fi
+else
+    echo "## Tag stripping error"
+    exit 1
 fi
 
 [ $NOMI ] || $MEDIAINFO "${OUTPUT}"
