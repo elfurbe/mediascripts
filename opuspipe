@@ -19,7 +19,7 @@ fi
 
 if [ -z "$1" ]; then
     echo "No input provided."
-    echo "${0} input output [track num]"
+    echo "${0} input_file output_file [track num]"
     exit 1
 fi
 if [ -z "$2" ]; then
@@ -38,10 +38,10 @@ else
         echo "Track number should be a number"
         exit 1;;
     *) 
-        TRACKNUM=$3
-        MITRACKNUM=`echo $3 + 1 | bc`;;
+        TRACKNUM=$3;;
     esac
 fi
+MITRACKNUM=`echo ${TRACKNUM} + 1 | bc`
 
 NL=$'\n'
 TRACK=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r ".media.track[${MITRACKNUM}] | @base64"`
@@ -58,6 +58,7 @@ TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${
 
 if [ ! "$TRACK_TYPE" == "Audio" ]; then
     echo "Track ${TRACKNUM} is not an audio track"
+    echo "${TRACK}"
     exit 1
 fi
 
