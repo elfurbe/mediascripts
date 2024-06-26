@@ -4,77 +4,78 @@
 ## It can only do one track, so if you have more than one you have to tell it which one to do
 
 # Check for tool dependencies
-SELF_FULLPATH=`realpath $0`
-SELF_DIR=`dirname $SELF_FULLPATH`
+SELF_FULLPATH=`realpath ${0}`
+SELF_DIR=`dirname ${SELF_FULLPATH}`
 # Override default tool list
 TOOLS=(ffmpeg opusenc jq base64 bc sed mediainfo column)
 # Does not depend on any other scripts
 SCRIPTS=NONE
-if [ ! -r $SELF_DIR/toolchecker ]; then
+if [ ! -r ${SELF_DIR}/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
 else
-    . $SELF_DIR/toolchecker
+    . ${SELF_DIR}/toolchecker
 fi
 
-if [ -z "$1" ]; then
+if [ -z "${1}" ]; then
     echo "No input provided."
     echo "${0} input_file output_file [track num]"
     exit 1
 fi
-if [ -z "$2" ]; then
+if [ -z "${2}" ]; then
     echo "No output provided."
     echo "${0} input_file output_file [track num]"
     exit 1
 fi
-INPUT="$1"
-OUTPUT="$2"
+INPUT="${1}"
+OUTPUT="${2}"
 
-if [ -z "$3" ]; then
+if [ -z "${3}" ]; then
     TRACKNUM=0
 else
-    case $3 in
+    case ${3} in
     ''|*[!0-9]*)
         echo "Track number should be a number"
         exit 1;;
     *) 
-        TRACKNUM=$3;;
+        TRACKNUM=${3};;
     esac
 fi
 MITRACKNUM=`echo ${TRACKNUM} + 1 | bc`
 
 NL=$'\n'
-TRACK=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r ".media.track[${MITRACKNUM}] | @base64"`
-TRACK_TYPE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.["@type"]'`
-TRACK_NUMBER=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.StreamOrder'`
-TRACK_CODEC=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.CodecID'`
-TRACK_BITRATE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.BitRate'`
-TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout'`
-[ "$TRACK_LAYOUT" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout_Original'`
-TRACK_CHANNELS=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Channels'`
-TRACK_COMPMODE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Compression_Mode'`
-TRACK_FORMAT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Format'`
+TRACK=`${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r ".media.track[${MITRACKNUM}] | @base64"`
+TRACK_TYPE=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.["@type"]'`
+TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.StreamOrder'`
+TRACK_CODEC=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.CodecID'`
+TRACK_BITRATE=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate'`
+TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout'`
+[ "${TRACK_LAYOUT}" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout_Original'`
+TRACK_CHANNELS=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Channels'`
+TRACK_COMPMODE=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Compression_Mode'`
+TRACK_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Format'`
 TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
 
-if [ ! "$TRACK_TYPE" == "Audio" ]; then
+if [ ! "${TRACK_TYPE}" == "Audio" ]; then
     echo "Track ${TRACKNUM} is not an audio track"
-    echo "${TRACK}"
+    echo ${TRACK} | ${BASE64} --decode | ${JQ}
     exit 1
 fi
 
 echo
 echo "Input Audio Track"
 echo "------------------"
-echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${TRACK_META}" | $COLUMN -t -s, -o " | "
+echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${TRACK_META}" | ${COLUMN} -t -s, -o " | "
 echo
 
-BR=$(echo "$TRACK_LAYOUT" | $SED -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~M\|Cb\|C\|L\|R~128~g' -e 's~\ ~\+~g' | $BC)
+BR=$(echo "${TRACK_LAYOUT}" | ${SED} -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~M\|Cb\|C\|L\|R~128~g' -e 's~\ ~\+~g' | ${BC})
 OUTPUT_TRACK_META="opus,${BR}k,${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
 echo
 echo "Output Audio Track"
 echo "------------------"
-echo "Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | $COLUMN -t -s, -o " | "
+echo "Codec,BitRate,Channels,Layout${NL}${OUTPUT_TRACK_META}" | ${COLUMN} -t -s, -o " | "
 echo
 
-echo $FFMPEG -hide_banner -loglevel error -i "${INPUT}" -map 0:${TRACKNUM} -map_metadata -1 -map_chapters -1 -f wav - \| $OPUSENC --bitrate ${BR}k - "${OUTPUT}"
-$FFMPEG -hide_banner -loglevel error -i "${INPUT}" -map 0:${TRACKNUM} -map_metadata -1 -map_chapters -1 -f wav - | $OPUSENC --bitrate ${BR}k - "${OUTPUT}"
+set -x
+${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:${TRACKNUM} -map_metadata -1 -map_chapters -1 -f wav - | ${OPUSENC} --bitrate ${BR}k - "${OUTPUT}"
+{ set +x; } 2>/dev/null
