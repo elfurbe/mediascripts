@@ -19,11 +19,6 @@ Usage: ${0##*/} -i <INPUT FILE>
 EOF
 }
 
-fail() {
-    printf '%s\n' "${1}" >&2 ## Send message to stderr.
-    exit "${2-1}" ## Return a code specified by $2, or 1 by default.
-}
-
 while [ $# -gt 0 ]; do
     OPT="${1}"
     case "${OPT}" in
@@ -66,7 +61,10 @@ while [ $# -gt 0 ]; do
     -h|--help)
         usage
         exit;;
-    *) fail "${0}: invalid option ${1}";;
+    *) 
+        echo "${0}: invalid option ${1}"
+        usage
+        exit 1;;
     esac
 done
 
