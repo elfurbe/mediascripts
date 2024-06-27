@@ -34,6 +34,12 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 EOF
 }
 
+fail() {
+    { set +x; }; 2>/dev/null
+    printf '%s\n' "${1}" >&2 ## Send message to stderr.
+    exit "${2-1}" ## Return a code specified by $2, or 1 by default.
+}
+
 paramsmunge() {
     case ":${X265_PARAMS}:" in
         *:"$1":*)
@@ -46,6 +52,7 @@ paramsmunge() {
             fi
     esac
 }
+
 X265_PARAMS=
 
 while [ $# -gt 0 ]; do
@@ -651,41 +658,23 @@ fi
 
 if [[ "${INPUT##*.}" = ".mkv" ]]; then
     echo "## Stripping covers from input file..."
-    echo "$STRIPCOVERS \"${INPUT}\""
+    ## This exits 1 on both errors and also if there are no covers to remove, so blind fire
+    set -x
     $STRIPCOVERS "${INPUT}"
-    # Can't check status on this, if there are no covers in the file, it exits 1
-    [ $? -eq 0 ] && echo "## Covers stripped." || echo "## error stripping covers."
+    { set +x; } 2>/dev/null
 fi
 
 echo "## Starting encode..."
 set -x
-nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT"
+nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete" || fail "## encoding error."
 { set +x; } 2>/dev/null
-if [ $? -eq 0 ]; then
-    echo "## encode complete."
-else
-    echo "## encoding error."
-    exit 1
-fi
 
 if [[ "${OUTPUT##*.}" = ".mkv" ]]; then
     echo "## Stripping tags from \"${OUTPUT}\"..."
     echo "$STRIPTAGS $(printf "%q" "${OUTPUT}")"
-    $STRIPTAGS "${OUTPUT}"
-    if [ $? -eq 0 ]; then
-        echo "## Tags stripped from \"${OUTPUT}\""
-    else
-        echo "## error stripping tags from \"${OUTPUT}\""
-        exit 1
-    fi
+    $STRIPTAGS "${OUTPUT}" && echo "## Tags stripped from \"${OUTPUT}\"" || fail "## error stripping tags from \"${OUTPUT}\""
 
     echo "## Adding stats to \"${OUTPUT}\"..."
     echo "$ADDSTATS $(printf "%q" "${OUTPUT}")"
-    $ADDSTATS "${OUTPUT}" 
-    if [ $? -eq 0 ]; then 
-        echo "## Stats added to \"${OUTPUT}\""
-    else
-        echo "## error adding stats to \"${OUTPUT}\""
-        exit 1
-    fi
+    $ADDSTATS "${OUTPUT}" && echo "## Stats added to \"${OUTPUT}\"" || fail "## error adding stats to \"${OUTPUT}\""
 fi
