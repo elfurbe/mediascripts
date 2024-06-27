@@ -48,4 +48,26 @@ done
 ## Save a copy of the IFS because I abuse it fucking constantly
 O_IFS="${IFS}"
 
+## Helpful functions
+fail() {
+    { set +x; }; 2>/dev/null
+    printf '%s\n' "${1}" >&2 ## Send message to stderr.
+    exit "${2-1}" ## Return a code specified by $2, or 1 by default.
+}
+
+paramsmunge() {
+    case ":${PARAMS}:" in
+        *:"${1}":*)
+            ;;
+        *)
+            if [ "$2" = "after" ] ; then
+                PARAMS=$(echo ${PARAMS}:${1} | sed -e 's/^://g' -e 's/:$//g')
+            else
+                PARAMS=$(echo ${1}:${PARAMS} | sed -e 's/^://g' -e 's/:$//g')
+            fi
+    esac
+}
+
+PARAMS=
+
 [ $DEBUG ] && echo
