@@ -78,21 +78,30 @@ while true; do
     echo
     echo -n "Track ID to edit (q to quit): "
     while read -r TRACK_TO_EDIT; do
-        if [ "$TRACK_TO_EDIT" == "q" ]; then
-            exit 0;
-        fi
-        TRACK_ID=$((TRACK_TO_EDIT + 2))
-        if [[ -n ${track_array[$TRACK_ID]} ]]; then
-            IFS=\; read ID SELECTOR TYPE CODEC LANGUAGE DEFAULT FORCED NAME <<<"$(echo ${track_array[$TRACK_ID]})"
-            break
-        else
-            echo "ERROR: Invalid track ID" && sleep 0.5
-            echo
-            printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
-            echo
-            echo -n "Track ID to edit (q to quit): "
-            continue 
-        fi
+        shopt -s extglob
+        case "$TRACK_TO_EDIT" in
+            q) exit 0;;
+            [0-9]|[0-9][0-9])
+                TRACK_ID=$((TRACK_TO_EDIT + 2))
+                if [[ -n ${track_array[$TRACK_ID]} ]]; then
+                    IFS=\; read ID SELECTOR TYPE CODEC LANGUAGE DEFAULT FORCED NAME <<<"$(echo ${track_array[$TRACK_ID]})"
+                    break
+                else
+                    echo "ERROR: Invalid track ID: ${TRACK_TO_EDIT}" && sleep 0.5
+                    echo
+                    printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
+                    echo
+                    echo -n "Track ID to edit (q to quit): "
+                    continue
+                fi;;
+            *)
+                echo "ERROR: Invalid track ID: ${TRACK_TO_EDIT}" && sleep 0.5
+                echo
+                printf '%s\n' "${track_array[@]}" | $COLUMN -t -s ';'
+                echo
+                echo -n "Track ID to edit (q to quit): "
+                continue;;
+        esac
     done
     selected_track=()
     selected_track+=("${track_array[0]}")
