@@ -37,6 +37,7 @@ done
 
 ## Utility scripts from this toolkit
 [ -z "$SCRIPTS" ] && SCRIPTS=(cropfinder stripcovers striptags addstats)
+[ -z "$SELF_DIR" ] && SELF_DIR=$(dirname realpath $0)
 
 for script in ${SCRIPTS[@]}; do
     [ "$script" = "NONE" ] && break
