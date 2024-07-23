@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 ## Simple TUI for changing common track properties in mkv containers
 
 # Check for tool dependencies

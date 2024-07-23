@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ## This is because I am lazy and I cannot ever remember all the flags to make ffmpeg shut the fuck up and opusenc read from stdin
 ## It can only do one track, so if you have more than one you have to tell it which one to do

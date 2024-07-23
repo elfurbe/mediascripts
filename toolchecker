@@ -1,4 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# check bash version up front, I use some pretty modern dumb tricks, apparently
+if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+    echo "These scripts require bash version 4.0 or newer for arcane nonsense reasons."
+    echo "Your bash version (${BASH_VERSION}) is too old."
+    echo "If you are running macOS, Apple no longer ships modern bash for license reasons."
+    echo "Consider installing a modern bash using Homebrew (https://brew.sh/) or Macports (https://macports.org)"
+    exit 1
+fi
 
 # Check for tool dependencies
 

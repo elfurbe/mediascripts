@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Check for tool dependencies
 SELF_FULLPATH=`realpath $0`
