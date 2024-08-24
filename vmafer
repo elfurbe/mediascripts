@@ -146,17 +146,12 @@ MI=$($MEDIAINFO --output=JSON "$SOURCE" | $BASE64)
 if [ -z "$MODEL" ]; then
     WIDTH=`echo "${MI}" | $BASE64 --decode | $JQ -r '.media.track[] | select (."@type"=="Video").Width'`
 	[ $DEBUG ] && echo "SOURCE WIDTH: $WIDTH"
-    if [ $WIDTH -gt 1920 ]; then
-        MODELFILE="vmaf_4k_v0.6.1.json"
-    else
-        MODELFILE="vmaf_v0.6.1.json"
-    fi
+
+    [ $WIDTH -gt 1920 ] && MODELFILE="vmaf_4k_v0.6.1.json" || MODELFILE="vmaf_v0.6.1.json"
     [ $DEBUG ] && echo "MODELFILE: $MODELFILE"
-    if [ ! -z "$FFMPEG_PREFIX" ]; then
-    	MODELPATH="${FFMPEG_PREFIX}/share/vmaf/model/${MODELFILE}"
-    else
-    	MODELPATH="/opt/ffmpeg5/share/vmaf/model/${MODELFILE}"
-    fi
+
+    [ ! -z "$FFMPEG_PREFIX" ] && MODELPATH="${FFMPEG_PREFIX}/share/vmaf/model/${MODELFILE}" || MODELPATH="/opt/ffmpeg5/share/vmaf/model/${MODELFILE}"
+
     if [ -s ${MODELPATH} ]; then
         VMAF_PARAMS="model='path=${MODELPATH}'"
         [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
@@ -174,14 +169,10 @@ if [ -z "$SUBSAMPLE" ]; then
 fi    
 VMAF_PARAMS="${VMAF_PARAMS}:n_subsample=${SUBSAMPLE}"
 
-if [ -z "$LOG_FORMAT" ]; then
-    LOG_FORMAT="csv"
-fi
+[ -z "$LOG_FORMAT" ] && LOG_FORMAT="csv"
 VMAF_PARAMS="${VMAF_PARAMS}:log_fmt=${LOG_FORMAT}"
 
-if [ -z "$LOG" ]; then
-    LOG="$(basename "${ENCODED}" .mkv).vmaf"
-fi
+[ -z "$LOG" ] && LOG="$(basename "${ENCODED}" .mkv).vmaf"
 VMAF_PARAMS="${VMAF_PARAMS}:log_path=${LOG}"
 
 VMAF_FEATURES=""
@@ -284,11 +275,8 @@ if [ $CROPPED ]; then
     fi
 fi
 
-if [ $CROP ]; then
-    LAVFI="[1:v]$CROP[source];[0:v][source]libvmaf=${VMAF_PARAMS}"
-else
-    LAVFI="[0:v][1:v]libvmaf=${VMAF_PARAMS}"
-fi
+[ -n "$CROP" ] && LAVFI="[1:v]$CROP[source];[0:v][source]libvmaf=${VMAF_PARAMS}" || LAVFI="[0:v][1:v]libvmaf=${VMAF_PARAMS}"
+
 set -x
 $FFMPEG -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
-{ set +x }; 2>/dev/null
+{ set +x; } 2>/dev/null
