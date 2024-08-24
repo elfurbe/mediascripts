@@ -433,7 +433,7 @@ fi
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
 G=240
 
-[ -z "$SVT_PRESET" ] && SVT_PRESET=7
+[ -z "$SVT_PRESET" ] && SVT_PRESET=5
 [ -z "$SVT_TUNE" ] && SVT_TUNE=2
 paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:enable-dlf=2"
 
