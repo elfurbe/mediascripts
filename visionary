@@ -99,6 +99,15 @@ if [ -z "${OUTPUT}" ]; then
     echo "Output file name base: ${OUTPUT}"
 fi
 
+if [ -n "${AV1}" ]; then
+        CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
+        if [ "${CHECK_SVTAV1_VERSION}" != "PSY" ]; then
+            echo "This script requires the SVT-AV1-PSY fork for Dolby Vision AV1 encoding."
+            echo "See https://github.com/gianni-rosato/svt-av1-psy for details."
+            exit 1
+        fi
+fi
+
 echo ">> Starting Dolby Vision/HDR10+ transcode"; echo
 
 ## this makes 'for crf in 16 18 20 22; do visionary -i A.Movie.mkv -o movie --crf $crf; done'
@@ -336,25 +345,25 @@ if [ -n "${AV1}" ]; then
         exit 1
     fi
     FINALVIDEO="${OUTPUT}.av1.ivf"
-    SVTAV1_PARAMS="--progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
+    SVTAV1_PARAMS="--enable-dlf 2 --enable-variance-boost 1 --enable-qm 1 --qm-min 0 --irefresh-type 2 --progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
     if [ -n "${ISBOTH}" ]; then 
         echo ">> Both DoVi and HDR10+ metadata present"
         SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
         SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
         set -x
-        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
         { set +x; } 2>/dev/null
     elif [ -n "${ISDOVI}" ]; then 
         echo ">> Only DoVi metadata present"
         SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
         set -x
-        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
         { set +x; } 2>/dev/null
     elif [ -n "${ISHDR10P}" ]; then  
         echo ">> Only HDR10+ metadata present"
         SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
         set -x
-        ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
         { set +x; } 2>/dev/null
     fi
 else # x265
