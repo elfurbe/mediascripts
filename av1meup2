@@ -131,6 +131,7 @@ done
 # Check for tool dependencies
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
+TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq bc tr sed grep awk SvtAv1EncApp)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -429,13 +430,29 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
+## test for the PSY fork of SVT-AV1
+CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
+
 ## SET GOP SIZE
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
 G=240
 
-[ -z "$SVT_PRESET" ] && SVT_PRESET=5
-[ -z "$SVT_TUNE" ] && SVT_TUNE=2
-paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:enable-dlf=2"
+[ -z "$SVT_PRESET" ] && SVT_PRESET=7
+if [ -z "$SVT_TUNE" ]; then
+    if [ "${CHECK_SVTAV1_VERSION}" == "PSY" ]; then
+        # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
+        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+        SVT_TUNE=3
+    else
+        # For vanilla SVT-AV1 we'll use tune 2 cause the nerdgods say so
+        # ref: https://wiki.x266.mov/docs/encoders/SVT-AV1#encoder-optimization
+        SVT_TUNE=2
+    fi
+fi
+
+paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=240"
+[ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "enable-dlf=2"
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
