@@ -187,8 +187,12 @@ if [ -n "${ISDOVI}" ]; then
 
     case "${DOVIPROFILE}" in
         "dvhe.05")
-            ## create a clean BL and convert the RPU to 8 format
             [ -n "${DEBUG}" ] && echo "MEL-type profile 5"
+            echo ">> Cleaning up named pipe"; echo
+            set -x
+            rm "${FIFO}"
+            { set +x; } 2>/dev/null
+            echo
             fail "<> I'm sorry Dave, I cannot currently encode dolby vision profile 5 content."
             #echo ">> NOTE: Profile 5 uses non-standard IPT-PQ-C2 colorspace in BL. Colors will not be properly rendered on playback devices that do not support Dolby Vision."
 
