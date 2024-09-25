@@ -432,6 +432,7 @@ fi
 
 ## test for the PSY fork of SVT-AV1
 CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
+[ $DEBUG ] && echo "SVTAV1_VERSION: ${CHECK_SVTAV1_VERSION}"
 
 ## SET GOP SIZE
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
@@ -451,7 +452,8 @@ if [ -z "$SVT_TUNE" ]; then
     fi
 fi
 
-paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
+#paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
+paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0"
 [ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "enable-dlf=2"
 
 if [ $COPY_HDR ]; then
@@ -474,27 +476,28 @@ if [ $COPY_HDR ]; then
     VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MAX_LUMINANCE" | ${BC})
     VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;$VIDEO_MIN_LUMINANCE" | ${BC})
 
-    if [ "$VIDEO_COLOR_TRANSFER" = "arib-std-b67" ]; then #HLG
-        paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
-        paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}:transfer-characteristics=${VIDEO_COLOR_TRANSFER}:matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
-    elif [ "$VIDEO_COLOR_TRANSFER" = "smpte2084" ]; then #HDR10
-        paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}"
-        paramsmunge "transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
-        paramsmunge "matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
-
-        GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
-        BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
-        RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
-        WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
-        LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
-        CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
-        
-        paramsmunge "mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}"
-    else
-        echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
-        echo "Bailing out."
-        exit 1
-    fi
+    paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}"
+    paramsmunge "transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
+    paramsmunge "matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
+    #
+    ## parameters specific to color transfers
+    case "${VIDEO_COLOR_TRANSFER}" in
+        smpte2084)
+            echo ">> HDR10/SMPTE2084 color transfer"
+            GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+            BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+            RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+            WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+            LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+            CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+            paramsmunge "mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}";;
+        arib-std-b67)
+            echo ">> HLG/ARIB-STD-B67 color transfer";;
+        *)
+            echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
+            echo "Bailing out."
+            exit 1;;
+    esac
 fi
 
 if [ ! -z "$EXTRA_PARAMS" ]; then

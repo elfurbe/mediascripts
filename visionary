@@ -142,7 +142,7 @@ REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
-FPS=$(${MEDIAINFO} ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+FPS=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
 HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
@@ -328,26 +328,30 @@ if [ -n "${AV1}" ]; then
     VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MAX_LUMINANCE}" | ${BC})
     VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MIN_LUMINANCE}" | ${BC})
 
-    if [ "${VIDEO_COLOR_TRANSFER}" = "arib-std-b67" ]; then #HLG
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES} --transfer-characteristics ${VIDEO_COLOR_TRANSFER} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
-    elif [ "${VIDEO_COLOR_TRANSFER}" = "smpte2084" ]; then #HDR10
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES}"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --transfer-characteristics ${VIDEO_COLOR_TRANSFER}"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
+    ## Common parameters
+    SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES}"
+    SVTAV1_PARAMS="${SVTAV1_PARAMS} --transfer-characteristics ${VIDEO_COLOR_TRANSFER}"
+    SVTAV1_PARAMS="${SVTAV1_PARAMS} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
 
-        GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
-        BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
-        RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
-        WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
-        LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
-        CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
-        
-        SVTAV1_PARAMS="--mastering-display G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}) --content-light ${CLL}"
-    else
-        echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
-        echo "Bailing out."
-        exit 1
-    fi
+    ## parameters specific to color transfers
+    case "${VIDEO_COLOR_TRANSFER}" in
+        smpte2084)
+            echo ">> HDR10/SMPTE2084 color transfer"
+            GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+            BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+            RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+            WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+            LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+            CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+            SVTAV1_PARAMS="--mastering-display G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}) --content-light ${CLL}";;
+        arib-std-b67)
+            echo ">> HLG/ARIB-STD-B67 color transfer";;
+        *)
+            echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
+            echo "Bailing out."
+            exit 1;;
+    esac
+
     FINALVIDEO="${OUTPUT}.av1.ivf"
     SVTAV1_PARAMS="--enable-dlf 2 --enable-variance-boost 1 --enable-qm 1 --qm-min 0 --irefresh-type 2 --progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
     if [ -n "${ISBOTH}" ]; then 
