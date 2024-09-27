@@ -19,7 +19,9 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --oprofile:    output profile [1080, 720, 480]
 --vf:          custom videofilter input
 --sdr:         best effort 2020->709 color fix
---deint:       deinterlace with specified method [nnedi (default), yadif]
+--yadif:       deinterlace with yadif 
+--yadifmode:   set yadif to specific mode (default: 1, send frame per field)
+--nnedi:       use the power of ai to deinterlace
 --ivtc:        Perform detelecine via specified method [ivtc (default), fieldmatch]
 --bitdepth:    Bitdepth for pixel format (8, 10 or 12, default: 10)
 --audio:       transcode lossless audio tracks to selected codec [flac, opus, aac]
@@ -93,13 +95,15 @@ while [ $# -gt 0 ]; do
     --sdr)
             SDR=1
             shift;;
-    --deint)
-            if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
-                DEINT="nnedi"
-            else
-                shift
-                DEINT="${1}"
-            fi
+    --yadif)
+            YADIF=1
+            shift;;
+    --yadifmode)
+            shift
+            YADIFMODE="${1}"
+            shift;;
+    --nnedi)
+            NNEDI=1
             shift;;
     --ivtc)
             if [ "${2-hate}" == "hate" ] || [[ "${2}" =~ ^-- ]]; then
@@ -555,49 +559,44 @@ fi
 ## DEINTERLACING SHENANIGANS
 SCANTYPE=`$MEDIAINFO "$INPUT" | ${GREP} "Scan type " | ${AWK} -F:\  '{print $2}'`
 SCANORDER=`$MEDIAINFO "$INPUT" | ${GREP} "Scan order " | ${AWK} -F:\  '{print $2}'`
-if [ -n "${DEINT}" ]; then
-    case ${DEINT} in
-        nnedi)
-            NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
-            NN_DEINT="all"
-            FIELD="af"
-            PLANES="7"
-            NSIZE="s32x6"
-            NNS="n32"
-            QUAL="slow"
-            ETYPE="a"
-            PSCRN="new3"
-            THREADS=18
-            VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}";;
-        yadif*) 
-            YADIFOPTS=$(echo $DEINT | awk -F, '{print $2}')
-            YADIFOPTS=${YADIFOPTS:="1:0:0"}
-            if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
-                if [ "$SCANORDER" = "Top Field First" ]; then
-                    VF="yadif=${YADIFOPTS}${VF:+,${VF}}"
-                else
-                    VF="yadif=${YADIFOPTS}${VF:+,${VF}}"
-                fi
-            else
-                [ $DEBUG ] && echo "Input video is not interlaced, skipping deint"
-            fi;;
-        mcdeint)
-            #echo "WARNING: mcdeint has been deprecated by ffmpeg in 5.x."
-            #echo "WARNING: If you want extremely slow, high-quality, frame-doubled dinterlacing in 5.x, use --nnedi."
-            #if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
-            #    if [ "$SCANORDER" = "Top Field First" ]; then
-            #        VF="yadif=3:0:0,mcdeint=2:0:10${VF:+,${VF}}"
-            #    else
-            #        VF="yadif=3:1:0,mcdeint=2:1:10${VF:+,${VF}}"
-            #    fi
-            #else
-            #    [ $DEBUG ] && echo "Input video is not interlaced, skipping mcdeint"
-            #fi
-            echo "## Method mcdeint is deprecated, exiting."; exit 1;;
-        false) ;;
-        *) echo "## Unrecognized deinterlace method '${DEINT}', exiting."; exit 1;;
-    esac
+DEINT_SUM=$(( ${YADIF:-0} + ${NNEDI:-0} ))
+if [ $DEINT_SUM -gt 1 ]; then
+    echo "Pick one deinterlace option, not more than one."
+    exit 1
+elif [ $(( ${DEINT_SUM:-0} + ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
+    echo "Don't deinterlace and also detelecine, that's bad."
+    exit 1
+elif [ $YADIFMODE ] && [ -z "$YADIF" ]; then
+    echo "Don't set yadifmode if you're not using yadif."
+    exit 1
+elif [ $YADIF ]; then
+    YADIFMODE=${YADIFMODE:=1}
+    if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
+        if [ "$SCANORDER" = "Top Field First" ]; then
+            VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
+        else
+            VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+        fi
+    else
+        if [ $DEBUG ]; then
+            echo "Input video is not interlaced, skipping deint"
+        fi
+    fi
+elif [ $NNEDI ]; then
+    ## This lets me send this path in with an environment variable, but otherwise, welp
+    [ -n "${NNEDI_WEIGHTS}" ] || NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
+    NN_DEINT="all"
+    FIELD="af"
+    PLANES="7"
+    NSIZE="s48x6"
+    NNS="n64"
+    QUAL="slow"
+    ETYPE="a"
+    PSCRN="new3"
+    THREADS=16
+    VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
 fi
+
 ## DETELECINE SHENANIGANS
 if [ -n "${IVTC}" ]; then
     case ${IVTC-"false"} in
