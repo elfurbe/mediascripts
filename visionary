@@ -146,28 +146,30 @@ FPS=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select(
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
 HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
-[[ "${HDRFORMAT}" =~ "Dolby" ]] && ISDOVI=1
-[[ "${FORMATCOMPAT}" =~ "HDR10+" ]] && ISHDR10P=1
 
-if [ -n "${ISDOVI}" ] && [ -n "${ISHDR10P}" ]; then
-    ISBOTH=1
+ISDOVI=0
+ISHDR10P=0
+
+if [[ "${HDRFORMAT}" =~ "Dolby" ]]; then
+    ISDOVI=1
+    echo ">> Dolby Vision metadata present"
 fi
+
+if [[ "${FORMATCOMPAT}" =~ "HDR10+" ]]; then
+    ISHDR10P=1
+    echo ">> HDR10+ metadata present"
+fi
+
+let HDRSUM=${ISDOVI}+${ISHDR10P}
 
 [ -n "${DEBUG}" ] && echo "HDR_Format: ${HDRFORMAT}"
 [ -n "${DEBUG}" ] && echo "ISDOVI: ${ISDOVI}"
 [ -n "${DEBUG}" ] && echo "HDR_Format_Compat: ${FORMATCOMPAT}"
 [ -n "${DEBUG}" ] && echo "ISHDR01P: ${ISHDR10P}"
-[ -n "${DEBUG}" ] && echo "ISBOTH: ${ISBOTH}"
+[ -n "${DEBUG}" ] && echo "HDRSUM: ${HDRSUM}"
 
-
-if [ -n "${ISBOTH}" ]; then
-    echo ">> Dolby Vision and HDR10+ metadata present"
-elif [ -n "${ISDOVI}" ]; then
-    echo ">> Dolby Vision metadata present"
-elif [ -n "${ISHDR10P}" ]; then
-    echo ">> HDR10+ metadata present"
-else
-   fail ">> No dynamic metadata present. What are we even doing here, folks?"
+if [ ${HDRSUM} -eq 0 ]; then
+    fail ">> No dynamic metadata present. What are we even doing here, folks?"
 fi
 
 echo ">> Making named pipe"; echo
@@ -177,7 +179,7 @@ ${MKFIFO} "${FIFO}"
 echo
 
 ## Dolby Vision stream prep
-if [ -n "${ISDOVI}" ]; then
+if [ ${ISDOVI} -eq 1 ]; then
     DOVIPROFILE=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Profile' | ${AWK} '{print $1}')
     DOVILEVEL=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Level' | ${AWK} '{print $1}')
 
@@ -269,7 +271,7 @@ if [ -n "${ISDOVI}" ]; then
 fi
 
 ## HDR10+ stream prep
-if [ -n "${ISHDR10P}" ]; then
+if [ ${ISHDR10P} -eq 1 ]; then
     if [ ! -f "${BL}" ]; then
         echo ">> Creating HDR10+-free base layer"; echo
         set -x
@@ -312,7 +314,7 @@ if [ -n "${AV1}" ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-    eval "$(${FFPROBE} -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g' -e 's/^\(.*\)\ \([A-Z].*\)=\(.*\)$/\1_\2=\3/g')"
+    eval "$(${FFPROBE} -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${BL}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g' -e 's/^\(.*\)\ \([A-Z].*\)=\(.*\)$/\1_\2=\3/g')"
 
     VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
 
@@ -354,26 +356,13 @@ if [ -n "${AV1}" ]; then
 
     FINALVIDEO="${OUTPUT}.av1.ivf"
     SVTAV1_PARAMS="--enable-dlf 2 --enable-variance-boost 1 --enable-qm 1 --qm-min 0 --irefresh-type 2 --progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
-    if [ -n "${ISBOTH}" ]; then 
-        echo ">> Both DoVi and HDR10+ metadata present"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
-        set -x
-        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
-        { set +x; } 2>/dev/null
-    elif [ -n "${ISDOVI}" ]; then 
-        echo ">> Only DoVi metadata present"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
-        set -x
-        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
-        { set +x; } 2>/dev/null
-    elif [ -n "${ISHDR10P}" ]; then  
-        echo ">> Only HDR10+ metadata present"
-        SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
-        set -x
-        nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
-        { set +x; } 2>/dev/null
-    fi
+
+    [ ${ISDOVI} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
+    [ ${ISHDR10P} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
+
+    set -x
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+    { set +x; } 2>/dev/null
 else # x265
     OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
     [ -n "${ISDOVI}" ] && OPTIONS="$OPTIONS --dovi-bl"
