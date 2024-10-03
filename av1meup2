@@ -31,7 +31,8 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --bitdepth:     Bitdepth for pixel format (8, 10 or 12, default: 10)
 --audio:        transcode audio tracks to selected codec [flac, opus, aac]
 --square:       convert anamorphic to square pixels which make sense
---forcelossy:  transcode all audio tracks to selected codec
+--forcelossy:   transcode all audio tracks to selected codec
+--pipe:         use a pipe to SvtAv1EncApp instead of ffmpeg native
 
 EOF
 }
@@ -118,6 +119,9 @@ while [ $# -gt 0 ]; do
     --forcelossy)
             FORCE_LOSSY=1
             shift;;
+    --pipe)
+            PIPE=1
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -131,7 +135,8 @@ done
 # Check for tool dependencies
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
-TOOLS=(ffmpeg ffprobe mkvpropedit mediainfo jq bc tr sed grep awk SvtAv1EncApp)
+TOOLS=(ffmpeg ffprobe mkvpropedit mkvmerge mediainfo jq bc tr sed grep awk SvtAv1EncApp)
+SCRIPTS=(hevcmeup2 striptags stripcovers addstats audiovise)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
     exit 1
@@ -606,9 +611,27 @@ if [[ "${INPUT##*.}" == "mkv" ]]; then
 fi
 
 echo "## Starting encode..."
-set -x
-nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete." || fail "encode error."
-{ set +x; } 2>/dev/null
+if [ ${PIPE} -eq 1 ]; then
+    SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
+    SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+    set -x
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf
+    { set +x; } 2>/dev/null
+    if [ -n "${AUDIO}" ]; then
+        case "${AUDIO}" in
+            flac) ${AUDIOVISE} --flac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
+            opus) ${AUDIOVISE} --opus --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
+            aac) ${AUDIOVISE} --aac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
+        esac
+        ${MKVMERGE} -o ${OUTPUT} ${OUTPUT%.mkv}.ivf ${OUTPUT%.mkv}.audiovise.mkv
+    else
+        ${MKVMERGE} -o ${OUTPUT} ${OUTPUT%.mkv}.ivf --no-video ${INPUT}
+    fi
+else
+    set -x
+    nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete." || fail "encode error."
+    { set +x; } 2>/dev/null
+fi
 
 if [[ "${OUTPUT##*.}" == "mkv" ]]; then
     echo "## Stripping tags from \"${OUTPUT}\"..."
