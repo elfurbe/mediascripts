@@ -619,13 +619,29 @@ if [ ${PIPE} -eq 1 ]; then
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ]; then
         case "${AUDIO}" in
-            flac) ${AUDIOVISE} --flac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
-            opus) ${AUDIOVISE} --opus --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
-            aac) ${AUDIOVISE} --aac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv;;
+            flac) 
+                set -x
+                ${AUDIOVISE} --flac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv
+                { set +x; } 2>/dev/null;;
+            opus) 
+                set -x
+                ${AUDIOVISE} --opus --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv
+                { set +x; } 2>/dev/null;;
+            aac) 
+                set -x
+                ${AUDIOVISE} --aac --novideo --input ${INPUT} --output ${OUTPUT%.mkv}.audiovise.mkv
+                { set +x; } 2>/dev/null;;
         esac
+        set -x
         ${MKVMERGE} -o ${OUTPUT} ${OUTPUT%.mkv}.ivf ${OUTPUT%.mkv}.audiovise.mkv
+        rm ${OUTPUT%.mkv}.ivf
+        rm ${OUTPUT%.mkv}.audiovise.mkv
+        { set +x; } 2>/dev/null
     else
+        set -x
         ${MKVMERGE} -o ${OUTPUT} ${OUTPUT%.mkv}.ivf --no-video ${INPUT}
+        rm ${OUTPUT%.mkv}.ivf
+        { set +x; } 2>/dev/null
     fi
 else
     set -x
