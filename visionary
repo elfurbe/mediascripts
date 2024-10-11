@@ -310,7 +310,7 @@ echo
 
 ## let's cook this sucker
 echo ">> Starting encode..."; echo
-if [ -n "${AV1}" ]; then
+if [ ${AV1} -eq 1 ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
@@ -365,14 +365,14 @@ if [ -n "${AV1}" ]; then
     { set +x; } 2>/dev/null
 else # x265
     OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
-    [ -n "${ISDOVI}" ] && OPTIONS="$OPTIONS --dovi-bl"
+    [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "Encode failed."
     { set +x; } 2>/dev/null
     COOKED="${BLX265}"
     ## time to put the sidecars back in the garage
     ## do HDR10+ injection first, if need be
-    if [ -n "${ISHDR10P}" ]; then
+    if [ ${ISHDR10P} -eq 1 ]; then
         echo ">> Injecting HDR10+ metadata into transcoded base layer..."; echo
         set -x
         ${HDR10PLUS_TOOL} inject --input ${COOKED} --json ${HDR10P} --output ${BL10P} || fail "HDR10+ injection failed."
@@ -382,7 +382,7 @@ else # x265
         FINALVIDEO="${BL10P}"
     fi
     ## dovi injection, if need be
-    if [ -n "${ISDOVI}" ]; then
+    if [ ${ISDOVI} -eq 1 ]; then
         echo ">> Injecting RPU into transcoded BL..."; echo
         set -x
         ${DOVI_TOOL} inject-rpu --input ${COOKED} --rpu-in ${RPU_8} --output ${WITH_RPU} || fail "RPU injection failed."
