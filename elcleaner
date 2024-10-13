@@ -176,7 +176,7 @@ fi
 TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | ${JQ} -r '.media.track[] | select (."@type"=="Audio") | @base64' | head -n 1`
 CODECID=$(echo "${TRACKS}" | ${BASE64} --decode | ${JQ} -r '.CodecID') 
 CLAYOUT=$(echo "${TRACKS}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout') 
-[ -n "${CFORMAT}" ] || CFORMAT=$(echo "${CLAYOUT}" | ${SED} -e 's~LFE~.1~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt\|Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw~1~g' | ${TR} -s ' ' '+' | ${BC})
+[ -n "${CFORMAT}" ] || CFORMAT=$(echo "${CLAYOUT} 0.0" | ${SED} -e 's~LFE~.1~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt\|Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw~1~g' | ${TR} -s ' ' '+' | ${BC})
 [ $DEBUG ] && echo "CODECID: ${CODECID}"
 [ $DEBUG ] && echo "CLAYOUT: ${CLAYOUT}"
 [ $DEBUG ] && echo "CFORMAT: ${CFORMAT}"
