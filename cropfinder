@@ -81,6 +81,10 @@ fi
 
 DUR=$($FFPROBE "$INPUT" 2>&1 | $GREP -e DURATION -e Duration | $HEAD -n1 | $AWK -F': ' '{print $2}' | $AWK -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | $AWK -F. '{print $1}')
 [ $DEBUG ] && echo "Duration: $DUR"
+if [ $DUR -le 0 ]; then
+    echo "Unknown duration."
+    exit 1
+fi
 DUR_TRIM=$((DUR - 600))
 SPLIT=$(($DUR_TRIM / $SAMPLES))
 [ $DEBUG ] && echo "Sample length: $SPLIT"
