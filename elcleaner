@@ -187,9 +187,25 @@ if [ -z "${AFORMAT}" ]; then
         "A_AAC") AFORMAT="aac";;
         "A_TRUEHD") AFORMAT="atmos";;
         "A_DTS") AFORMAT="dtsx";;
-        "A_OPUS")
-            echo "Opus transcoded audio detected."
-            read -p "Enter original aformat: " AFORMAT;;
+        "A_OPUS"|"A_AAC")
+            SOURCEDIR=${PWD##*/}
+            if [[ ${SOURCEDIR} =~ "DTS-HD.MA" ]]; then
+                AFORMAT="dtshd"
+            elif [[ ${SOURCEDIR} =~ "DTS-HD.HRA" ]]; then
+                AFORMAT="dtshra"
+            elif [[ ${SOURCEDIR} =~ "TrueHD" ]]; then
+                AFORMAT="truehd"
+            elif [[ ${SOURCEDIR} =~ "FLAC" ]]; then
+                AFORMAT="lpcm"
+            elif [[ ${SOURCEDIR} =~ "LPCM" ]]; then
+                AFORMAT="lpcm"
+            elif [[ ${SOURCEDIR} =~ "Opus" ]]; then
+                AFORMAT="opus"
+            elif [[ ${SOURCEDIR} =~ "AAC" ]]; then
+                AFORMAT="AAC"
+            else
+                read -p "Enter original aformat: " AFORMAT
+            fi;;
     esac
 fi
 
