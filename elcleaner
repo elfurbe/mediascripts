@@ -176,17 +176,19 @@ fi
 TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | ${JQ} -r '.media.track[] | select (."@type"=="Audio") | @base64' | head -n 1`
 CODECID=$(echo "${TRACKS}" | ${BASE64} --decode | ${JQ} -r '.CodecID') 
 CLAYOUT=$(echo "${TRACKS}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout') 
+COMPRESSION=$(echo "${TRACKS}" | ${BASE64} --decode | ${JQ} -r '.Compression_Mode')
 [ -n "${CFORMAT}" ] || CFORMAT=$(echo "${CLAYOUT} 0.0" | ${SED} -e 's~LFE~.1~g' -e 's~Cb\|C\|Cs\|M\|L\|Lt\|R\|Rt\|Rss\|Lss\|Rsr\|Lsr\|Rb\|Lb\|Rs\|Ls\|Rw\|Lw~1~g' | ${TR} -s ' ' '+' | ${BC})
 [ $DEBUG ] && echo "CODECID: ${CODECID}"
 [ $DEBUG ] && echo "CLAYOUT: ${CLAYOUT}"
 [ $DEBUG ] && echo "CFORMAT: ${CFORMAT}"
+[ $DEBUG ] && echo "COMPRESSION: ${COMPRESSION}"
 if [ -z "${AFORMAT}" ]; then
     case "${CODECID}" in
         "A_EAC3") AFORMAT="eac3";;
         "A_AC3") AFORMAT="ac3";;
         "A_AAC") AFORMAT="aac";;
         "A_TRUEHD") AFORMAT="atmos";;
-        "A_DTS") AFORMAT="dtsx";;
+        "A_DTS") [ "$COMPRESSION" == "Lossy" ] && AFORMAT="dts" || AFORMAT="dtsx";;
         "A_OPUS"|"A_AAC")
             SOURCEDIR=${PWD##*/}
             if [[ ${SOURCEDIR} =~ "DTS-HD.MA" ]]; then
