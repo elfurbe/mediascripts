@@ -150,15 +150,15 @@ if [ -z "$MODEL" ]; then
     [ $WIDTH -gt 1920 ] && MODELFILE="vmaf_4k_v0.6.1.json" || MODELFILE="vmaf_v0.6.1.json"
     [ $DEBUG ] && echo "MODELFILE: $MODELFILE"
 
-    [ ! -z "$FFMPEG_PREFIX" ] && MODELPATH="${FFMPEG_PREFIX}/share/vmaf/model/${MODELFILE}" || MODELPATH="/opt/ffmpeg5/share/vmaf/model/${MODELFILE}"
-
-    if [ -s ${MODELPATH} ]; then
-        VMAF_PARAMS="model='path=${MODELPATH}'"
-        [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
+    if [ ! -z "${VMAF_MODELPATH}" ] && [ -d ${VMAF_MODELPATH} ] && [ -f ${VMAF_MODELPATH}/${MODELFILE} ]; then
+        MODEL="${VMAF_MODELPATH}/${MODELFILE}"
+    elif [ ! -z "${FFMPEG_PREFIX}" ] && [ -d "${FFMPEG_PREFIX}" ] && [ -f ${FFMPEG_PREFIX}/share/vmaf/model/${MODELFILE} ]; then
+        MODEL="/opt/ffmpeg5/share/vmaf/model/${MODELFILE}"
     else
-        echo "'${MODELPATH}' is not a file"
-        exit 1
+        fail "<> No model file provided, no model file located, we have no model, repeat: we have no model."
     fi
+    VMAF_PARAMS="model='path=${MODEL}'"
+    [ $DEBUG ] && echo "VMAF_PARAMS MODEL PATH: $VMAF_PARAMS"
 else
     VMAF_PARAMS="model='path=${MODEL}'"
 fi
@@ -276,6 +276,16 @@ if [ $CROPPED ]; then
 fi
 
 [ -n "$CROP" ] && LAVFI="[1:v]$CROP[source];[0:v][source]libvmaf=${VMAF_PARAMS}" || LAVFI="[0:v][1:v]libvmaf=${VMAF_PARAMS}"
+
+if [ $DEBUG ]; then
+    echo ">> COMMAND"
+    echo $FFMPEG -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
+    read -p "Press y to continue, any other key to exit..." confirm
+    case $confirm in
+        [Yy] ) true;;
+        * ) exit;;
+    esac
+fi
 
 set -x
 $FFMPEG -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
