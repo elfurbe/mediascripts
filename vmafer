@@ -100,6 +100,9 @@ while [ $# -gt 0 ]; do
     --no-motion2)
             NOMOTION2=1
             shift;;
+    --no-ciede)
+            NOCIEDE=1
+            shift;;
     --cropped)
             CROPPED=1
             shift;;
@@ -168,6 +171,10 @@ if [ -z "$SUBSAMPLE" ]; then
     SUBSAMPLE=`printf "%.0f\n" "$FRAME_RATE"`
 fi    
 VMAF_PARAMS="${VMAF_PARAMS}:n_subsample=${SUBSAMPLE}"
+
+F_DURATION=$($FFPROBE -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries format=duration "$SOURCE")
+I_DURATION=$(echo ${F_DURATION} | awk -F. '{print $1}')
+DURATION=$(echo "${I_DURATION} * ${FRAME_RATE} / ${SUBSAMPLE}" | bc)
 
 [ -z "$LOG_FORMAT" ] && LOG_FORMAT="csv"
 VMAF_PARAMS="${VMAF_PARAMS}:log_fmt=${LOG_FORMAT}"
@@ -279,7 +286,7 @@ fi
 
 if [ $DEBUG ]; then
     echo ">> COMMAND"
-    echo $FFMPEG -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
+    echo nice -n 5 ${FFMPEG} -analyzeduration 100 -probesize 100M -loglevel quiet -stats -t ${DURATION} -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
     read -p "Press y to continue, any other key to exit..." confirm
     case $confirm in
         [Yy] ) true;;
@@ -288,5 +295,5 @@ if [ $DEBUG ]; then
 fi
 
 set -x
-nice -n 5 ${FFMPEG} -analyzeduration 100 -probesize 100M -loglevel quiet -stats -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
+nice -n 5 ${FFMPEG} -analyzeduration 100 -probesize 100M -loglevel quiet -stats -t ${DURATION} -i "${ENCODED}" -i "${SOURCE}" -map 0:v -map 1:v -map_chapters -1 -lavfi ${LAVFI} -f null -
 { set +x; } 2>/dev/null
