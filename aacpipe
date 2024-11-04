@@ -50,8 +50,10 @@ TRACK_NUMBER=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.StreamOrder'`
 TRACK_CODEC=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.CodecID'`
 TRACK_BITRATE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.BitRate'`
 TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout'`
-[ "$TRACK_LAYOUT" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout_Original'`
+[ "${TRACK_LAYOUT}" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.ChannelLayout_Original'`
 TRACK_CHANNELS=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Channels'`
+TRACK_CHANNELS_ORIGINAL=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Channels_Original'`
+[ "${TRACK_CHANNELS_ORIGINAL}" != null ] && TRACK_CHANNELS=${TRACK_CHANNELS_ORIGINAL}
 TRACK_COMPMODE=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Compression_Mode'`
 TRACK_FORMAT=`echo "${TRACK}" | $BASE64 --decode | $JQ -r '.Format'`
 

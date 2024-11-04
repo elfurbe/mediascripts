@@ -52,6 +52,8 @@ TRACK_BITRATE=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate'`
 TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout'`
 [ "${TRACK_LAYOUT}" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout_Original'`
 TRACK_CHANNELS=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Channels'`
+TRACK_CHANNELS_ORIGINAL=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Channels_Original'`
+[ "${TRACK_CHANNELS_ORIGINAL}" != null ] && TRACK_CHANNELS=${TRACK_CHANNELS_ORIGINAL}
 TRACK_COMPMODE=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Compression_Mode'`
 TRACK_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Format'`
 TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE}${NL}"
