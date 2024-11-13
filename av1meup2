@@ -135,7 +135,7 @@ done
 # Check for tool dependencies
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
-TOOLS=(ffmpeg ffprobe mkvpropedit mkvmerge mediainfo jq bc tr sed grep awk SvtAv1EncApp)
+TOOLS=(ffmpeg ffprobe mkvpropedit mkvmerge mediainfo jq bc tr sed grep awk SvtAv1EncApp base64)
 SCRIPTS=(striptags stripcovers addstats audiovise cropfinder)
 if [ ! -r $SELF_DIR/toolchecker ]; then
     echo "toolchecker not found."
@@ -228,7 +228,7 @@ esac
 VIDEO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
 IFS=$'\n'
 for TRACK in ${VIDEO_TRACKS}; do
-    TRACK_HDR_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.HDR_Format'`
+    TRACK_HDR_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.HDR_Format'`
     if [[ "$TRACK_HDR_FORMAT" != "null" ]]; then
         [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
         [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && [ $DEBUG ] && echo "Dolby Vision detected."
@@ -318,25 +318,25 @@ if [ $AUDIO ]; then
     AUDIO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Audio") | @base64'`
     IFS=$'\n'
     for TRACK in ${AUDIO_TRACKS}; do
-        TRACK_NUMBER=`echo "${TRACK}" | base64 --decode | $JQ -r '.StreamOrder'`
-        TRACK_CODEC=`echo "${TRACK}" | base64 --decode | $JQ -r '.CodecID'`
-        TRACK_BITRATE=`echo "${TRACK}" | base64 --decode | $JQ -r '.BitRate'`
-        TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout'`
+        TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.StreamOrder'`
+        TRACK_CODEC=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.CodecID'`
+        TRACK_BITRATE=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.BitRate'`
+        TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.ChannelLayout'`
         [ "${TRACK_LAYOUT}" == null ] && TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.ChannelLayout_Original'`
-        TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels'`
+        TRACK_CHANNELS=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.Channels'`
         TRACK_CHANNELS_ORIGINAL=`echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Channels_Original'`
         [ "${TRACK_CHANNELS_ORIGINAL}" != null ] && TRACK_CHANNELS=${TRACK_CHANNELS_ORIGINAL}
-        TRACK_COMPMODE=`echo "${TRACK}" | base64 --decode | $JQ -r '.Compression_Mode'`
-        TRACK_FORMAT=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format'`
-        TRACK_FORMAT_COMMERCIAL_IFANY=`echo "${TRACK}" | base64 --decode | $JQ -r '.Format_Commercial_IfAny'`
+        TRACK_COMPMODE=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.Compression_Mode'`
+        TRACK_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.Format'`
+        TRACK_FORMAT_COMMERCIAL_IFANY=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.Format_Commercial_IfAny'`
         if [[ "$TRACK_FORMAT_COMMERCIAL_IFANY" =~ Atmos|DTS:X ]] || [[ "$TRACK_LAYOUT" =~ Objects ]]; then
             TRACK_OBJFORMAT=1
         else
             TRACK_OBJFORMAT=0
         fi
         if [ "$TRACK_LAYOUT" = "null" ] && [ "$TRACK_CHANNELS" = "null" ]; then
-            TRACK_LAYOUT=`echo "${TRACK}" | base64 --decode | $JQ -r '.ChannelLayout_Original'`
-            TRACK_CHANNELS=`echo "${TRACK}" | base64 --decode | $JQ -r '.Channels_Original'`
+            TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.ChannelLayout_Original'`
+            TRACK_CHANNELS=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.Channels_Original'`
         fi
         TRACK_META="${TRACK_NUMBER},${TRACK_CODEC},${TRACK_BITRATE},${TRACK_CHANNELS},${TRACK_LAYOUT},${TRACK_FORMAT},${TRACK_COMPMODE},${TRACK_OBJFORMAT}${NL}"
         AUDIO_TRACK_META="${AUDIO_TRACK_META}${TRACK_META}"
