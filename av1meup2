@@ -595,7 +595,13 @@ fi
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     echo "$STRIPCOVERS \"${INPUT}\""
-    echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    if [ ${PIPE} -eq 1 ]; then
+        SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
+        SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf"
+    else
+        echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    fi
     echo "$STRIPTAGS \"${OUTPUT}\""
     echo "$ADDSTATS \"${OUTPUT}\""
     #exit
@@ -621,23 +627,9 @@ if [ ${PIPE} -eq 1 ]; then
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ]; then
-        case "${AUDIO}" in
-            flac) 
-                set -x
-                ${AUDIOVISE} --flac --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
-                [ $? -eq 0 ] || fail "## audiovise error, exiting"
-                { set +x; } 2>/dev/null;;
-            opus) 
-                set -x
-                ${AUDIOVISE} --opus --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
-                [ $? -eq 0 ] || fail "## audiovise error, exiting"
-                { set +x; } 2>/dev/null;;
-            aac) 
-                set -x
-                ${AUDIOVISE} --aac --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
-                [ $? -eq 0 ] || fail "## audiovise error, exiting"
-                { set +x; } 2>/dev/null;;
-        esac
+        ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
+        [ $? -eq 0 ] || fail "## audiovise error, exiting"
+        { set +x; } 2>/dev/null
         set -x
         ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT%.mkv}.ivf" "${OUTPUT%.mkv}.audiovise.mkv"
         [ $? -eq 0 ] || fail "## merge error, exiting"
