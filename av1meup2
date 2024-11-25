@@ -319,6 +319,7 @@ if [ $AUDIO ]; then
     IFS=$'\n'
     for TRACK in ${AUDIO_TRACKS}; do
         TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.StreamOrder'`
+        [ ${TRACK_NUMBER} -eq 0 ] && TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.ID'`
         TRACK_CODEC=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.CodecID'`
         TRACK_BITRATE=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.BitRate'`
         TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.ChannelLayout'`
@@ -626,7 +627,7 @@ if [ ${PIPE} -eq 1 ]; then
     set -x
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf
     { set +x; } 2>/dev/null
-    if [ -n "${AUDIO}" ]; then
+    if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
         ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
         [ $? -eq 0 ] || fail "## audiovise error, exiting"
         { set +x; } 2>/dev/null

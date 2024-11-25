@@ -94,7 +94,8 @@ AUDIO_TRACK_META=""
 TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | jq -r '.media.track[] | select (."@type"=="Audio") | @base64'`
 IFS=$'\n'
 for TRACK in ${TRACKS}; do
-    TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | jq -r '.StreamOrder'`
+    TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.StreamOrder'`
+    [ ${TRACK_NUMBER} -eq 0 ] && TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.ID'`
     TRACK_CODEC=`echo "${TRACK}" | ${BASE64} --decode | jq -r '.CodecID'`
     TRACK_BITRATE=`echo "${TRACK}" | ${BASE64} --decode | jq -r '.BitRate'`
     TRACK_LAYOUT=`echo "${TRACK}" | ${BASE64} --decode | jq -r '.ChannelLayout'`
