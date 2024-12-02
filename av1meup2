@@ -625,7 +625,7 @@ if [ ${PIPE} -eq 1 ]; then
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT%.mkv}.ivf"
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
         ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
@@ -635,8 +635,8 @@ if [ ${PIPE} -eq 1 ]; then
         ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT%.mkv}.ivf" "${OUTPUT%.mkv}.audiovise.mkv"
         [ $? -eq 0 ] || fail "## merge error, exiting"
         { set +x; } 2>/dev/null
-        rm ${OUTPUT%.mkv}.ivf
-        rm ${OUTPUT%.mkv}.audiovise.mkv
+        rm "${OUTPUT%.mkv}.ivf"
+        rm "${OUTPUT%.mkv}.audiovise.mkv"
         { set +x; } 2>/dev/null
     else
         set -x
