@@ -167,6 +167,7 @@ let HDRSUM=${ISDOVI}+${ISHDR10P}
 [ -n "${DEBUG}" ] && echo "HDR_Format_Compat: ${FORMATCOMPAT}"
 [ -n "${DEBUG}" ] && echo "ISHDR01P: ${ISHDR10P}"
 [ -n "${DEBUG}" ] && echo "HDRSUM: ${HDRSUM}"
+[ -n "${DEBUG}" ] && [ -n "${AV1}" ]  echo "AV1: ${AV1}"
 
 if [ ${HDRSUM} -eq 0 ]; then
     fail ">> No dynamic metadata present. What are we even doing here, folks?"
@@ -310,7 +311,7 @@ echo
 
 ## let's cook this sucker
 echo ">> Starting encode..."; echo
-if [ ${AV1} -eq 1 ]; then
+if [ -n "${AV1}" ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
