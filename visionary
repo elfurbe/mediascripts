@@ -245,7 +245,7 @@ if [ ${ISDOVI} -eq 1 ]; then
             [ -n "${DEBUG}" ] && echo "MEL-type profile 8"
 
             ## create stripped base layer
-            echo ">> Creating dovi-free base layer"; echo
+            echo ">> Removing Dolby Vision RPUs from base layer"; echo
             set -x
             ${MKVEXTRACT} "${INPUT}" tracks 0:"${FIFO}" &
             ${DOVI_TOOL} remove --output "${BL}" - <"${FIFO}" || fail "Base layer stripping failed."
