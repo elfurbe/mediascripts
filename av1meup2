@@ -32,7 +32,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --audio:        transcode audio tracks to selected codec [flac, opus, aac]
 --square:       convert anamorphic to square pixels which make sense
 --forcelossy:   transcode all audio tracks to selected codec
---pipe:         use a pipe to SvtAv1EncApp instead of ffmpeg native
+--nopipe:       use ffmpeg native encoding instead of pipe
 
 EOF
 }
@@ -119,8 +119,8 @@ while [ $# -gt 0 ]; do
     --forcelossy)
             FORCE_LOSSY=1
             shift;;
-    --pipe)
-            PIPE=1
+    --nopipe)
+            NOPIPE=1
             shift;;
     -h|--help)
             usage
@@ -596,12 +596,12 @@ fi
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     echo "$STRIPCOVERS \"${INPUT}\""
-    if [ ${PIPE} -eq 1 ]; then
+    if [ $NOPIPE ]; then
+        echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf"
-    else
-        echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
     fi
     echo "$STRIPTAGS \"${OUTPUT}\""
     echo "$ADDSTATS \"${OUTPUT}\""
@@ -621,7 +621,11 @@ if [[ "${INPUT##*.}" == "mkv" ]]; then
 fi
 
 echo "## Starting encode..."
-if [ ${PIPE} -eq 1 ]; then
+if [ $NOPIPE ]; then
+    set -x
+    nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete." || fail "encode error."
+    { set +x; } 2>/dev/null
+else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
     set -x
@@ -645,10 +649,6 @@ if [ ${PIPE} -eq 1 ]; then
         rm ${OUTPUT%.mkv}.ivf
         { set +x; } 2>/dev/null
     fi
-else
-    set -x
-    nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete." || fail "encode error."
-    { set +x; } 2>/dev/null
 fi
 
 if [[ "${OUTPUT##*.}" == "mkv" ]]; then
