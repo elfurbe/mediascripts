@@ -93,7 +93,7 @@ CROPDETECT="cropdetect=.1:16:0"
 ALL_CROPS=""
 for i in $(seq 1 $SAMPLES); do
     START=$(($SPLIT * ${i}))
-    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 |  $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
+    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 | $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
     [ $DEBUG ] && echo -e "Segment start: $START\t$CROP"
     ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
 done
