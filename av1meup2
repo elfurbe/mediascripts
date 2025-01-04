@@ -17,6 +17,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --params:       Alias for --svt-params
 --svt-tune:     SVT-AV1 tune value (default: 2)
 --tune:         Alias for --svt-tune
+--fast-decode   Use fast-decode (default: no)
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
 --oprofile:     output profile [2160, 1080, 720, 480]
@@ -71,6 +72,9 @@ while [ $# -gt 0 ]; do
     --svt-tune|--tune)
             shift
             SVT_TUNE="${1}"
+            shift;;
+    --fast-decode)
+            FAST_DECODE=1
             shift;;
     --crop)
             CROP=1
@@ -507,6 +511,13 @@ if [ $COPY_HDR ]; then
             echo "Bailing out."
             exit 1;;
     esac
+fi
+
+if [ $FAST_DECODE ]; then
+    # There are technically two fast-decode modes, 1 and 2. 2 is newer.
+    # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could see
+    # so I'm only doing mode 2
+    paramsmunge "fast-decode=2" after
 fi
 
 if [ ! -z "$EXTRA_PARAMS" ]; then
