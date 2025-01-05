@@ -18,6 +18,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --svt-tune:     SVT-AV1 tune value (default: 2)
 --tune:         Alias for --svt-tune
 --fast-decode   Use fast-decode (default: no)
+--film-grain    denoise/synthetic grain tricks (bad for detail, good for bitrate, default 8)
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
 --oprofile:     output profile [2160, 1080, 720, 480]
@@ -74,7 +75,10 @@ while [ $# -gt 0 ]; do
             SVT_TUNE="${1}"
             shift;;
     --fast-decode)
-            FAST_DECODE=1
+            if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; FAST_DECODE=$1; else FAST_DECODE=2; fi
+            shift;;
+    --film-grain)
+            if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; FILM_GRAIN=$1; else FILM_GRAIN=8; fi
             shift;;
     --crop)
             CROP=1
@@ -148,6 +152,14 @@ else
     . $SELF_DIR/toolchecker
 fi
 
+if [ $DEBUG ]; then
+    echo "VARIABLE STATE:"
+    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE; do
+        [ -n "${!var}" ] && echo "$var: ${!var}" || echo "$var not set"
+    done
+    echo
+fi
+
 if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
     echo "Insufficient options provided."
     echo "Must supply input (-i/--input) and output (-o/--output) at minimum"
@@ -158,7 +170,9 @@ fi
 if [ ! -s "$INPUT" ] && [[ "$INPUT" != *"%"* ]]; then
     echo "Error reading input file: $INPUT"
     exit 1
-elif [ -f "$OUTPUT" ]; then
+fi
+
+if [ -f "$OUTPUT" ]; then
     echo "Output file exists."
     exit 1
 fi
@@ -452,16 +466,19 @@ CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo 
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
 G=240
 
-if [ $FAST_DECODE ]; then
-    # There are technically two fast-decode modes, 1 and 2. 2 is newer.
-    # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could see
-    # so I'm only doing mode 2
+if [ -n "${FAST_DECODE}" ] && [ "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
+    # There are technically two fast-decode modes, 1 and 2. 2 is newer, more meaningful decode improvement, MAYBE more visual tradeoffs.
+    # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could measure
     paramsmunge "fast-decode=2" after
     # fast-decode recommends tune 1 so we're forcing tune 1
     SVT_TUNE=1
+elif [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
+    echo "fast-decode value is not recognized: ${FAST_DECODE}"
+    exit 1
 fi
 
 [ -z "$SVT_PRESET" ] && SVT_PRESET=7
+
 if [ -z "$SVT_TUNE" ]; then
     if [ "${CHECK_SVTAV1_VERSION}" == "PSY" ]; then
         # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
@@ -475,9 +492,20 @@ if [ -z "$SVT_TUNE" ]; then
     fi
 fi
 
+if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
+    # technically you can do film grain without denoise but I cannot find a definite answer on whether there's any point in doing so
+    # if it doesn't denoise the input frames, you're not getting any of the bitrate value of doing this, but you're still paying
+    # the compute-time penalty to analyze the frame for grain characteristics, so I don't know why you'd do one without the other
+    # ergo if you ask for film-grain you're getting film-grain-denoise also. If you _KNOW_ why you would want to do
+    # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
+    paramsmunge "film-grain=${FILM_GRAIN}:film-grain-denoise=1" after
+    # I _think_ the PSY encoder enables this automatically but I'm not positive
+    [ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "adaptive-film-grain=1" after
+fi
+
 #paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
-paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0"
-[ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "enable-dlf=2"
+paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0" after
+[ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "enable-dlf=2" after
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
