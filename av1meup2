@@ -452,6 +452,15 @@ CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo 
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
 G=240
 
+if [ $FAST_DECODE ]; then
+    # There are technically two fast-decode modes, 1 and 2. 2 is newer.
+    # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could see
+    # so I'm only doing mode 2
+    paramsmunge "fast-decode=2" after
+    # fast-decode recommends tune 1 so we're forcing tune 1
+    SVT_TUNE=1
+fi
+
 [ -z "$SVT_PRESET" ] && SVT_PRESET=7
 if [ -z "$SVT_TUNE" ]; then
     if [ "${CHECK_SVTAV1_VERSION}" == "PSY" ]; then
@@ -474,7 +483,7 @@ if [ $COPY_HDR ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-    eval "$($FFPROBE -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/^\(.*\)\ \(.*\):/\1_\2:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/\(.*\)"\(.*\)\ \(.*\)":/\1"\2_\3":/g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
+    eval "$($FFPROBE -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/^\(.*\)\ \(.*\):/\1_\2:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/\(.*\)"\(.*\)\ \(.*\)":/\1"\2_\3":/g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
 
     VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
 
@@ -512,13 +521,6 @@ if [ $COPY_HDR ]; then
             echo "Bailing out."
             exit 1;;
     esac
-fi
-
-if [ $FAST_DECODE ]; then
-    # There are technically two fast-decode modes, 1 and 2. 2 is newer.
-    # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could see
-    # so I'm only doing mode 2
-    paramsmunge "fast-decode=2" after
 fi
 
 if [ ! -z "$EXTRA_PARAMS" ]; then
