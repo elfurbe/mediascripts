@@ -244,6 +244,7 @@ for TRACK in ${VIDEO_TRACKS}; do
             TONEMAP="zscale=t=linear:npl=${NPL},format=gbrpf32le,tonemap=${METHOD}:param=0.4:desat=${DESAT},zscale=p=bt709:t=bt709:m=bt709:r=${RANGE}"
             VF="${TONEMAP}${VF:+,${VF}}"
         else
+            paramsmunge "enable-hdr=1"
             COPY_HDR=1
         fi
     fi
