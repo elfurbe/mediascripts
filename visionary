@@ -14,10 +14,13 @@ Usage: ${0##*/} -i <INPUT FILE>
 -t|--tune:          set an alternate encoder tune (defaults: x265: none, svtav1: 3)
 -a|--audio:         transcode source audio to specified codec (opus, aac, flac)
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
+--dual:             Run both an hevc AND an av1 encode in one pass (more efficient)
 --debug:            print debugging information
 
 EOF
 }
+
+HEVC=1
 
 while [ $# -gt 0 ]; do
     OPT="${1}"
@@ -53,6 +56,10 @@ while [ $# -gt 0 ]; do
         AUDIO="${1}"
         shift;;
     --av1)
+        AV1=1
+        HEVC=0
+        shift;;
+    --dual)
         AV1=1
         shift;;
     --debug)
@@ -99,7 +106,7 @@ if [ -z "${OUTPUT}" ]; then
     echo "Output file name base: ${OUTPUT}"
 fi
 
-if [ -n "${AV1}" ]; then
+if [ -n "${AV1}" ] || [ -n "${DUAL}" ]; then
         CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
         if [ "${CHECK_SVTAV1_VERSION}" != "PSY" ]; then
             echo "This script requires the SVT-AV1-PSY fork for Dolby Vision AV1 encoding."
@@ -138,6 +145,8 @@ BLX265="${OUTPUT}.BL.x265.hevc"
 [ -f "${BLX265}" ] && fail "x265 transcoding destination file already exists: ${BLX265}"
 WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
 [ -f "${WITH_RPU}" ] && fail "Transcoded file with RPU injection already exists: ${WITH_RPU}"
+AV1_IVF="${OUTPUT}.av1.ivf"
+[ -f "${AV1_IFV}" ] && fail "AV1 output file already exists: ${AV1_IVF}"
 REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
@@ -167,7 +176,8 @@ let HDRSUM=${ISDOVI}+${ISHDR10P}
 [ -n "${DEBUG}" ] && echo "HDR_Format_Compat: ${FORMATCOMPAT}"
 [ -n "${DEBUG}" ] && echo "ISHDR01P: ${ISHDR10P}"
 [ -n "${DEBUG}" ] && echo "HDRSUM: ${HDRSUM}"
-[ -n "${DEBUG}" ] && [ -n "${AV1}" ]  echo "AV1: ${AV1}"
+[ -n "${DEBUG}" ] && [ -n "${AV1}" ] && echo "AV1: ${AV1}"
+[ -n "${DEBUG}" ] && [ -n "${DUAL}" ] && echo "DUAL: ${DUAL}"
 
 if [ ${HDRSUM} -eq 0 ]; then
     fail ">> No dynamic metadata present. What are we even doing here, folks?"
@@ -311,7 +321,7 @@ echo
 
 ## let's cook this sucker
 echo ">> Starting encode..."; echo
-if [ -n "${AV1}" ]; then
+if [ ${AV1} -eq 1 ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
@@ -356,16 +366,18 @@ if [ -n "${AV1}" ]; then
             exit 1;;
     esac
 
-    FINALVIDEO="${OUTPUT}.av1.ivf"
     SVTAV1_PARAMS="--enable-dlf 2 --enable-variance-boost 1 --enable-qm 1 --qm-min 0 --irefresh-type 2 --progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
 
     [ ${ISDOVI} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
     [ ${ISHDR10P} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
 
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${FINALVIDEO}
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${AV1_IVF}
     { set +x; } 2>/dev/null
-else # x265
+fi
+
+## HEVC
+if [ ${HEVC} -eq 1 ]; then
     OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
     [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
     set -x
@@ -381,7 +393,7 @@ else # x265
         { set +x; } 2>/dev/null
         echo
         COOKED="${BL10P}"
-        FINALVIDEO="${BL10P}"
+        FINALVIDEO_HEVC="${BL10P}"
     fi
     ## dovi injection, if need be
     if [ ${ISDOVI} -eq 1 ]; then
@@ -399,7 +411,7 @@ else # x265
             echo
         fi
         COOKED="${WITH_RPU}"
-        FINALVIDEO="${WITH_RPU}"
+        FINALVIDEO_HEVC="${WITH_RPU}"
     fi
 fi
 
@@ -419,7 +431,8 @@ fi
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-${MKVMERGE} --output "${REMUXED}" "${FINALVIDEO}" --no-video "${OTHERTRACKS}" || fail "Merge failed."
+[ $AV1 -eq 1 ] && ${MKVMERGE} --output "${REMUXED/mkv/av1.mkv}" "${AV1_IVF}" --no-video "${OTHERTRACKS}" || fail "AV1 merge failed."
+[ $HEVC -eq 1 ] && ${MKVMERGE} --output "${REMUXED/mkv/hevc.mkv}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}" || fail "HEVC merge failed."
 { set +x; } 2>/dev/null
 
 set -x
@@ -433,7 +446,7 @@ if [ -n "${KEEP}" ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
-    CLEANUP=(${BL} ${EL} ${RPU} ${RPU_8} ${HDR10P} ${BLX265} ${BL10P} ${WITH_RPU} ${FINALVIDEO})
+    CLEANUP=(${BL} ${EL} ${RPU} ${RPU_8} ${HDR10P} ${BLX265} ${BL10P} ${WITH_RPU} ${FINALVIDEO_HEVC} ${AV1_IVF})
     [[ "${OTHERTRACKS}" != "${INPUT}" ]] && CLEANUP+=(${OTHERTRACKS})
     for FILE in ${CLEANUP[@]}; do
         if [ -f "${FILE}" ]; then
