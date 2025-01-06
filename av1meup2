@@ -472,7 +472,7 @@ if [ -n "${FAST_DECODE}" ] && [ "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
     paramsmunge "fast-decode=2" after
     # fast-decode recommends tune 1 so we're forcing tune 1
     SVT_TUNE=1
-elif [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
+elif [ -n "${FAST_DECODE}" ] && [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
     echo "fast-decode value is not recognized: ${FAST_DECODE}"
     exit 1
 fi
@@ -501,6 +501,10 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     paramsmunge "film-grain=${FILM_GRAIN}:film-grain-denoise=1" after
     # I _think_ the PSY encoder enables this automatically but I'm not positive
     [ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "adaptive-film-grain=1" after
+    if [ ${SVT_PRESET} -gt 6 ]; then
+        echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
+        SVT_PRESET=6
+    fi
 fi
 
 #paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
