@@ -79,7 +79,7 @@ done
 SELF_FULLPATH=`realpath ${0}`
 SELF_DIR=`dirname ${SELF_FULLPATH}`
 # Override default tool list
-TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc)
+TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc column)
 [ -n "${VERIFY}" ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2 striptags stripcovers addstats)
@@ -171,13 +171,16 @@ fi
 
 let HDRSUM=${ISDOVI}+${ISHDR10P}
 
-[ -n "${DEBUG}" ] && echo "HDR_Format: ${HDRFORMAT}"
-[ -n "${DEBUG}" ] && echo "ISDOVI: ${ISDOVI}"
-[ -n "${DEBUG}" ] && echo "HDR_Format_Compat: ${FORMATCOMPAT}"
-[ -n "${DEBUG}" ] && echo "ISHDR01P: ${ISHDR10P}"
-[ -n "${DEBUG}" ] && echo "HDRSUM: ${HDRSUM}"
-[ -n "${DEBUG}" ] && [ -n "${AV1}" ] && echo "AV1: ${AV1}"
-[ -n "${DEBUG}" ] && [ -n "${DUAL}" ] && echo "DUAL: ${DUAL}"
+if [ $DEBUG ]; then
+    echo " VARIABLE STATE:"
+    echo "-----------------"
+    for var in INPUT OUTPUT HDRFORMAT ISDOVI FORMATCOMPAT ISHDR10P HDRSUM AV1 DUAL KEEP VERIFY CRF PRESET TUNE AUDIO; do
+        [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
+    done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
+    echo
+fi
+
+exit
 
 if [ ${HDRSUM} -eq 0 ]; then
     fail ">> No dynamic metadata present. What are we even doing here, folks?"
