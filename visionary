@@ -180,8 +180,6 @@ if [ $DEBUG ]; then
     echo
 fi
 
-exit
-
 if [ ${HDRSUM} -eq 0 ]; then
     fail ">> No dynamic metadata present. What are we even doing here, folks?"
 fi
