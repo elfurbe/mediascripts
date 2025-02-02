@@ -152,12 +152,26 @@ else
     . $SELF_DIR/toolchecker
 fi
 
+## figure out which fork/version of SVT-AV1 we're dealing with
+SVTAV1_FORK=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY" || echo "mainline")
+SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | head -n1 | awk '{print $2}' | sed 's/^v//g')
+SVTAV1_MAJOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $1}')
+SVTAV1_MINOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $2}')
+SVTAV1_PATCH=$(echo ${SVTAV1_VERSION} | awk -F. '{print $3}')
+
 if [ $DEBUG ]; then
-    echo " VARIABLE STATE:"
-    echo "-----------------"
+    echo "VARIABLE STATE:"
+    echo "-------------------------"
     for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE; do
         [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
+    echo
+
+    echo "SVT-AV1 Info:"
+    echo "------------------------"
+    for var in SVTAV1_FORK SVTAV1_VERSION; do
+        [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
+    done | ${COLUMN} --separator , --table --table-name "SVT-AV1 INFO" --output-separator " | "
     echo
 fi
 
@@ -459,10 +473,6 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
-## test for the PSY fork of SVT-AV1
-CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
-[ $DEBUG ] && echo "SVTAV1_VERSION: ${CHECK_SVTAV1_VERSION}"
-
 ## SET GOP SIZE
 ## ~10x frame rate, not more than 300, 240 is probably fine for everything?
 G=240
@@ -481,7 +491,7 @@ fi
 [ -z "$SVT_PRESET" ] && SVT_PRESET=7
 
 if [ -z "$SVT_TUNE" ]; then
-    if [ "${CHECK_SVTAV1_VERSION}" == "PSY" ]; then
+    if [ "${SVTAV1_FORK}" == "PSY" ]; then
         # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
         # It's experimental but they consider it better so we'll use it if you're using the PSY branch
         [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
@@ -501,7 +511,7 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
     paramsmunge "film-grain=${FILM_GRAIN}:film-grain-denoise=1" after
     # I _think_ the PSY encoder enables this automatically but I'm not positive
-    [ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "adaptive-film-grain=1" after
+    [ "${SVTAV1_FORK}" == "PSY" ] && paramsmunge "adaptive-film-grain=1" after
     if [ ${SVT_PRESET} -gt 6 ]; then
         echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
         SVT_PRESET=6
@@ -510,7 +520,7 @@ fi
 
 #paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
 paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0" after
-[ "${CHECK_SVTAV1_VERSION}" == "PSY" ] && paramsmunge "enable-dlf=2" after
+[ "${SVTAV1_FORK}" == "PSY" ] && paramsmunge "enable-dlf=2" after
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
