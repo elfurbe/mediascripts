@@ -250,24 +250,27 @@ MERGEOPTIONS+=(-a ${AUDIO_TRACKS})
 MERGEOPTIONS+=(-s ${SUBTITLE_TRACKS})
 ## the space at the end is important, it unsets the track name entirely
 MERGEOPTIONS+=(--track-name 0:\ )
-[ "$TRACKNAME" != "" ] && MERGEOPTIONS+=(--track-name 1:"${TRACKNAME}")
-if [ -n "$TRACKNAMES" ]; then
-    IFS=$'\n'
-    for ITEM in $(echo "$TRACKNAMES" | tr ',' '\n'); do
-        MERGEOPTIONS+=(--track-name ${ITEM})
-    done
-    IFS=""
-fi
 MERGEOPTIONS+=(--language 0:eng)
 #MERGEOPTIONS+=(--language 1:en)
 [ $STRIPCOMPAT ] && MERGEOPTIONS+=(-a !2)
 [ $NOCHAPTERS ] && MERGEOPTIONS+=(--no-chapters)
 MERGEOPTIONS+=("${INPUT}")
+
+[ "$TRACKNAME" != "" ] && PROPTIONS+=(--edit track:a1 --set "name=${TRACKNAME}")
+if [ -n "$TRACKNAMES" ]; then
+    IFS=$'\n'
+    for ITEM in $(echo "$TRACKNAMES" | tr ',' '\n'); do
+        sleep 1
+        #PROPTIONS+=(--track-name ${ITEM})
+    done
+    IFS=""
+fi
 unset IFS
 
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     echo "$MKVMERGE $(printf " %q" "${MERGEOPTIONS[@]}")"
+    echo "$MKVPROPEDIT "${OUTPUT}" $(printf " %q" "${PROPTIONS[@]}")"
     read -p "Press y to continue, any other key to exit..." CONFIRM
     case $CONFIRM in
         [Yy] ) true;;
@@ -277,15 +280,28 @@ fi
 
 echo "## Merging..."
 set -x
-$MKVMERGE "${MERGEOPTIONS[@]}"
+($MKVMERGE "${MERGEOPTIONS[@]}")
 { set +x; } 2>/dev/null
 
 if [ $? -eq 0 ]; then
     echo "## Merge complete."
 else
-    echo "## merge error"
+    echo "<> merge error"
     exit 1
 fi
+
+echo "## Setting audio track names"
+set -x
+(${MKVPROPEDIT} "${OUTPUT}" "${PROPTIONS[@]}")
+{ set +x; } 2>/dev/null
+
+if [ $? -eq 0 ]; then
+    echo "## Track naming complete."
+else
+    echo "<> track naming error"
+    exit 1
+fi
+
 
 echo "## Theraputic tag strip on output file"
 set -x
@@ -304,7 +320,7 @@ if [ $? -eq 0 ]; then
         exit 1
     fi
 else
-    echo "## Tag stripping error"
+    echo "<> Tag stripping error"
     exit 1
 fi
 
