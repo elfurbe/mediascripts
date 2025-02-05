@@ -617,7 +617,7 @@ elif [ $YADIF ]; then
 elif [ $NNEDI ]; then
     ## This lets me send this path in with an environment variable, but otherwise, welp
     [ -n "${NNEDI_WEIGHTS}" ] || NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
-    [ -f "${NNEDI_WEIGHTS}" ] || fail "NNEDI_WEIGHTS file does not exist: ${NNEDI_WEIGHTS}"
+    [ -f "${NNEDI_WEIGHTS}" ] || fail "NNEDI_WEIGHTS file does not exist: ${NNEDI_WEIGHTS}"$'\n'"Set NNEDI_WEIGHTS environment variable to corret location or put the file at the above location"
     NN_DEINT="all"
     FIELD="af"
     PLANES="7"
