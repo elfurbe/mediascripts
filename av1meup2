@@ -35,6 +35,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --square:       convert anamorphic to square pixels which make sense
 --forcelossy:   transcode all audio tracks to selected codec
 --nopipe:       use ffmpeg native encoding instead of pipe
+--rpufile:      RPU file for dolby vision purposes (cannot use with nopipe)
 
 EOF
 }
@@ -130,6 +131,10 @@ while [ $# -gt 0 ]; do
     --nopipe)
             NOPIPE=1
             shift;;
+    --rpufile)
+            shift
+            RPUFILE="${1}"
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -162,7 +167,7 @@ SVTAV1_PATCH=$(echo ${SVTAV1_VERSION} | awk -F. '{print $3}')
 if [ $DEBUG ]; then
     echo "VARIABLE STATE:"
     echo "-------------------------"
-    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE; do
+    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE RPUFILE; do
         [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
@@ -651,18 +656,23 @@ if [ ! -z "$VF" ]; then
     ENCODE_FLAGS="$ENCODE_FLAGS -filter:v $VF"
 fi
 
+if [ -n "${RPUFILE}" ]; then
+    [ $NOPIPE ] && echo "Cannot use rpu file without native encoder app" || paramsmunge "dolby-vision-rpu=${RPUFILE}" after
+fi
+
+
 if [ $DEBUG ]; then
     echo "COMMANDS:"
-    echo "$STRIPCOVERS \"${INPUT}\""
+    [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPCOVERS \"${INPUT}\""
     if [ $NOPIPE ]; then
         echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
-        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT%.mkv}.ivf"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
     fi
-    echo "$STRIPTAGS \"${OUTPUT}\""
-    echo "$ADDSTATS \"${OUTPUT}\""
+    [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPTAGS \"${OUTPUT}\""
+    [[ "${INPUT##*.}" == "mkv" ]] && echo "$ADDSTATS \"${OUTPUT}\""
     #exit
     read -p "Press y to encode, any other key to exit..." confirm
     case $confirm in
@@ -687,24 +697,24 @@ else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT%.mkv}.ivf"
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}"
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
-        ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT%.mkv}.audiovise.mkv"
+        ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
         [ $? -eq 0 ] || fail "## audiovise error, exiting"
         { set +x; } 2>/dev/null
         set -x
-        ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT%.mkv}.ivf" "${OUTPUT%.mkv}.audiovise.mkv"
+        ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" "${OUTPUT/%mkv/audiovise.mkv}"
         [ $? -eq 0 ] || fail "## merge error, exiting"
         { set +x; } 2>/dev/null
-        rm "${OUTPUT%.mkv}.ivf"
-        rm "${OUTPUT%.mkv}.audiovise.mkv"
+        rm "${OUTPUT/%mkv/ivf}"
+        rm "${OUTPUT/%mkv/audiovise.mkv}"
         { set +x; } 2>/dev/null
     else
         set -x
-        ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT%.mkv}.ivf" --no-video "${INPUT}"
+        ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" --no-video "${INPUT}"
         [ $? -eq 0 ] || fail "## merge error, exiting"
-        rm ${OUTPUT%.mkv}.ivf
+        rm ${OUTPUT/%mkv/ivf}
         { set +x; } 2>/dev/null
     fi
 fi
