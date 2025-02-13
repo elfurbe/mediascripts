@@ -662,11 +662,15 @@ if [ ! -z "$VF" ]; then
 fi
 
 if [ -n "${RPUFILE}" ]; then
-    [ $NOPIPE ] && echo "Cannot use rpu file without native encoder app" || paramsmunge "dolby-vision-rpu=${RPUFILE}" after
+    [ "${SVTAV1_FORK}" == "PSY" ] || fail "SVT-AV1-PSY required for RPU file support"
+    [ -z ${NOPIPE} ] || fail "Must pipe to native encoder to use RPU data"
+    paramsmunge "dolby-vision-rpu=${RPUFILE}" after
 fi
 
 if [ -n "${HDR10PFILE}" ]; then
-    [ $NOPIPE ] && echo "Cannot use hdr10p file without native encoder app" || paramsmunge "hdr10plus-json=${HDR10PFILE}" after
+    [ "${SVTAV1_FORK}" == "PSY" ] || fail "SVT-AV1-PSY required for HDR10+ json file support"
+    [ -z ${NOPIPE} ] || fail "Must pipe to native encoder to use HDR10+ json data"
+    paramsmunge "hdr10plus-json=${HDR10PFILE}" after
 fi
 
 if [ $DEBUG ]; then
