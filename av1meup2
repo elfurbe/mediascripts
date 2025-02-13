@@ -666,7 +666,7 @@ if [ -n "${RPUFILE}" ]; then
 fi
 
 if [ -n "${HDR10PFILE}" ]; then
-    [ $NOPIPE ] && echo "Cannot use hdr10p file without native encoder app" || paramsmunge "hdr10plus-json=${RPUFILE}" after
+    [ $NOPIPE ] && echo "Cannot use hdr10p file without native encoder app" || paramsmunge "hdr10plus-json=${HDR10PFILE}" after
 fi
 
 if [ $DEBUG ]; then
