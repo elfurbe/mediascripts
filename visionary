@@ -9,10 +9,13 @@ Usage: ${0##*/} -i <INPUT FILE>
 -o|--output:        base file name for one million artifacts, do not include file extension
 -k|--keep:          keep artifacts
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
--c|--crf:           set an alternate crf (defaults: x265: 16, svtav1: 22)
--p|--preset:        set an alternate encoder preset (defaults: x265: medium, svtav1: 7)
--t|--tune:          set an alternate encoder tune (defaults: x265: none, svtav1: 3)
 -a|--audio:         transcode source audio to specified codec (opus, aac, flac)
+--x265crf:          set an alternate x265 crf (default: 16)
+--x265preset:       set an alternate x265 preset (default: medium)
+--x265tune:         set an alternate x265 tune (default: none)
+--svtcrf:           set an alternate svt-av1 crf (default: 22)
+--svtpreset:        set an alternate svt-av1 preset (default: 7)
+--svttune:          set an alternate svt-av1 tune (default: 3)
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --dual:             Run both an hevc AND an av1 encode in one pass (more efficient)
 --debug:            print debugging information
@@ -21,6 +24,9 @@ EOF
 }
 
 HEVC=1
+AV1=0
+KEEP=0
+VERIFY=0
 
 while [ $# -gt 0 ]; do
     OPT="${1}"
@@ -39,17 +45,29 @@ while [ $# -gt 0 ]; do
     -v|--verify)
         VERIFY=1
         shift;;
-    -c|--crf)
+    --x265crf)
         shift
-        CRF="${1}"
+        X265CRF="${1}"
         shift;;
-    -p|--preset)
+    --x265preset)
         shift
-        PRESET="${1}"
+        X265PRESET="${1}"
         shift;;
-    -t|--tune)
+    --x265tune)
         shift
-        TUNE="${1}"
+        X265TUNE="${1}"
+        shift;;
+    --svtcrf)
+        shift
+        SVTCRF="${1}"
+        shift;;
+    --svtpreset)
+        shift
+        SVTPRESET="${1}"
+        shift;;
+    --svttune)
+        shift
+        SVTTUNE="${1}"
         shift;;
     -a|--audio)
         shift
@@ -80,9 +98,9 @@ SELF_FULLPATH=`realpath ${0}`
 SELF_DIR=`dirname ${SELF_FULLPATH}`
 # Override default tool list
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc column)
-[ -n "${VERIFY}" ] && TOOLS+=(dvesverifier)
+[ ${VERIFY} -eq 1 ] && TOOLS+=(dvesverifier)
 # Depends on hevcmeup2 for transcoding
-SCRIPTS=(hevcmeup2 striptags stripcovers addstats)
+SCRIPTS=(hevcmeup2 av1meup2 striptags stripcovers addstats)
 [ -n "${AUDIO}" ] && SCRIPTS+=(audiovise)
 
 if [ ! -r ${SELF_DIR}/toolchecker ]; then
@@ -104,24 +122,23 @@ if [ -z "${OUTPUT}" ]; then
     echo "Building output file base name from input file name..."
     OUTPUT=$(echo "${INPUT}" | sed -e 's/.\(mkv\|mp4\|ts\)/_visionary/g')
     echo "Output file name base: ${OUTPUT}"
+else
+    [[ "${OUTPUT##*.}" == "mkv" ]] && OUTPUT="${OUTPUT%.*}"
 fi
 
-if [ -n "${AV1}" ] || [ -n "${DUAL}" ]; then
-        CHECK_SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY")
-        if [ "${CHECK_SVTAV1_VERSION}" != "PSY" ]; then
+if [ ${AV1} -eq 1 ]; then
+        ## figure out which fork/version of SVT-AV1 we're dealing with
+        SVTAV1_FORK=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY" || echo "mainline")
+        SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | head -n1 | awk '{print $2}' | sed 's/^v//g')
+        SVTAV1_MAJOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $1}')
+        SVTAV1_MINOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $2}')
+        SVTAV1_PATCH=$(echo ${SVTAV1_VERSION} | awk -F. '{print $3}')
+
+        if [ "${SVTAV1_FORK}" != "PSY" ]; then
             echo "This script requires the SVT-AV1-PSY fork for Dolby Vision AV1 encoding."
             echo "See https://github.com/gianni-rosato/svt-av1-psy for details."
             exit 1
         fi
-fi
-
-echo ">> Starting Dolby Vision/HDR10+ transcode"; echo
-
-## this makes 'for crf in 16 18 20 22; do visionary -i A.Movie.mkv -o movie --crf $crf; done'
-## work so much easier that I don't care if it makes sense to anyone else
-if [ -n "${CRF}" ]; then
-    OUTPUT="${OUTPUT}_${CRF}"
-    echo ">> Appending crf value to output filenames: ${OUTPUT}"
 fi
 
 ## build assorted artifact filenames and make sure they don't exist
@@ -146,7 +163,7 @@ BLX265="${OUTPUT}.BL.x265.hevc"
 WITH_RPU="${OUTPUT}.BL+RPU.x265.hevc"
 [ -f "${WITH_RPU}" ] && fail "Transcoded file with RPU injection already exists: ${WITH_RPU}"
 AV1_IVF="${OUTPUT}.av1.ivf"
-[ -f "${AV1_IFV}" ] && fail "AV1 output file already exists: ${AV1_IVF}"
+[ -f "${AV1_IVF}" ] && fail "AV1 output file already exists: ${AV1_IVF}"
 REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "Final remux target file already exists: ${REMUXED}"
 
@@ -171,18 +188,26 @@ fi
 
 let HDRSUM=${ISDOVI}+${ISHDR10P}
 
-if [ $DEBUG ]; then
+if [ ${DEBUG:-0} -eq 1 ]; then
+    echo
     echo " VARIABLE STATE:"
     echo "-----------------"
-    for var in INPUT OUTPUT HDRFORMAT ISDOVI FORMATCOMPAT ISHDR10P HDRSUM AV1 DUAL KEEP VERIFY CRF PRESET TUNE AUDIO; do
+    for var in INPUT FPS OUTPUT HDRFORMAT FORMATCOMPAT ISDOVI ISHDR10P HDRSUM HEVC AV1 KEEP VERIFY X265CRF X265PRESET X265TUNE SVTCRF SVTPRESET SVTTUNE AUDIO SVTAV1_FORK SVTAV1_VERSION FIFO BL BL10P EL RPU RPU_8 HDR10P BLX265 WITH_RPU AV1_IVF REMUXED; do
         [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
+    read -p "Press y to encode, any other key to exit..." confirm
+    case $confirm in
+        [Yy] ) true;;
+        * ) exit;;
+    esac
 fi
 
 if [ ${HDRSUM} -eq 0 ]; then
     fail ">> No dynamic metadata present. What are we even doing here, folks?"
 fi
+
+echo ">> Starting Dolby Vision/HDR10+ transcode"; echo
 
 echo ">> Making named pipe"; echo
 set -x
@@ -201,7 +226,7 @@ if [ ${ISDOVI} -eq 1 ]; then
 
     case "${DOVIPROFILE}" in
         "dvhe.05")
-            [ -n "${DEBUG}" ] && echo "MEL-type profile 5"
+            [ ${DEBUG:-0} -eq 1 ] && echo "MEL-type profile 5"
             echo ">> Cleaning up named pipe"; echo
             set -x
             rm "${FIFO}"
@@ -228,8 +253,8 @@ if [ ${ISDOVI} -eq 1 ]; then
             ;;
         "dvhe.07")
             ## since I can't figure out how to preserve a FEL, we're gonna demux the BL and EL and extract the RPU to 8-compatible format
-            [ -n "${DEBUG}" ] && echo "FEL-type profile 7"
-            [ -n "${DEBUG}" ] && echo "Cannot preserve EL through transcoding, will convert RPU to MEL-compatible profile 8 format"
+            [ ${DEBUG:-0} -eq 1 ] && echo "FEL-type profile 7"
+            [ ${DEBUG:-0} -eq 1 ] && echo "Cannot preserve EL through transcoding, will convert RPU to MEL-compatible profile 8 format"
 
             ## demux the layers
             echo ">> Demuxing layers"; echo
@@ -241,7 +266,7 @@ if [ ${ISDOVI} -eq 1 ]; then
 
             ## extract the original RPU from the EL
             ## until I figure out how to preserve a FEL stack, no need for this step, but I'm keeping it in here
-            #[ -n "${DEBUG}" ] && echo "Extracting RPU"
+            #[ ${DEBUG:-0} -eq 1 ] && echo "Extracting RPU"
             #${DOVI_TOOL} extract-rpu --input ${EL} --rpu-out ${RPU}
             
             ## extract and convert the profile 7 RPU to a profile 8 RPU
@@ -253,7 +278,7 @@ if [ ${ISDOVI} -eq 1 ]; then
             ;;
         "dvhe.08")
             ## great news, we're already in profile 8 territory
-            [ -n "${DEBUG}" ] && echo "MEL-type profile 8"
+            [ ${DEBUG:-0} -eq 1 ] && echo "MEL-type profile 8"
 
             ## create stripped base layer
             echo ">> Removing Dolby Vision RPUs from base layer"; echo
@@ -322,64 +347,21 @@ echo
 
 ## let's cook this sucker
 echo ">> Starting encode..."; echo
+
 if [ ${AV1} -eq 1 ]; then
-    ## REFERENCES
-    # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
-    ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-    eval "$(${FFPROBE} -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${BL}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/^/video_/g' -e 's/^.*=/\U&/g' -e 's/^\(.*\)\ \([A-Z].*\)=\(.*\)$/\1_\2=\3/g')"
-
-    VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
-
-    ## Processing up the variables from ffprobe fractions to floats
-    VIDEO_GREEN_X_BC=$(echo "scale=4;${VIDEO_GREEN_X}" | ${BC})
-    VIDEO_GREEN_Y_BC=$(echo "scale=4;${VIDEO_GREEN_Y}" | ${BC})
-    VIDEO_BLUE_X_BC=$(echo "scale=4;${VIDEO_BLUE_X}" | ${BC})
-    VIDEO_BLUE_Y_BC=$(echo "scale=4;${VIDEO_BLUE_Y}" | ${BC})
-    VIDEO_RED_X_BC=$(echo "scale=4;${VIDEO_RED_X}" | ${BC})
-    VIDEO_RED_Y_BC=$(echo "scale=4;${VIDEO_RED_Y}" | ${BC})
-    VIDEO_WHITE_POINT_X_BC=$(echo "scale=4;${VIDEO_WHITE_POINT_X}" | ${BC})
-    VIDEO_WHITE_POINT_Y_BC=$(echo "scale=4;${VIDEO_WHITE_POINT_Y}" | ${BC})
-    VIDEO_MAX_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MAX_LUMINANCE}" | ${BC})
-    VIDEO_MIN_LUMINANCE_BC=$(echo "scale=4;${VIDEO_MIN_LUMINANCE}" | ${BC})
-
-    ## Common parameters
-    SVTAV1_PARAMS="${SVTAV1_PARAMS} --enable-hdr 1"
-    SVTAV1_PARAMS="${SVTAV1_PARAMS} --color-primaries ${VIDEO_COLOR_PRIMARIES}"
-    SVTAV1_PARAMS="${SVTAV1_PARAMS} --transfer-characteristics ${VIDEO_COLOR_TRANSFER}"
-    SVTAV1_PARAMS="${SVTAV1_PARAMS} --matrix-coefficients ${VIDEO_COLOR_SPACE_FIXED}"
-
-    ## parameters specific to color transfers
-    case "${VIDEO_COLOR_TRANSFER}" in
-        smpte2084)
-            echo ">> HDR10/SMPTE2084 color transfer"
-            GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
-            BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
-            RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
-            WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
-            LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
-            CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
-            SVTAV1_PARAMS="${SVTAV1_PARAMS} --mastering-display G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}) --content-light ${CLL}";;
-        arib-std-b67)
-            echo ">> HLG/ARIB-STD-B67 color transfer";;
-        *)
-            echo "Unrecognized color transfer: ${VIDEO_COLOR_TRANSFER}"
-            echo "Bailing out."
-            exit 1;;
-    esac
-
-    SVTAV1_PARAMS="--enable-dlf 2 --enable-variance-boost 1 --enable-qm 1 --qm-min 0 --irefresh-type 2 --progress 3 -i stdin --preset ${PRESET:-7} --input-depth 10 --crf ${CRF:-22} --keyint 240 --tune ${TUNE:-3} ${SVTAV1_PARAMS}"
-
-    [ ${ISDOVI} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --dolby-vision-rpu ${RPU_8}"
-    [ ${ISHDR10P} -eq 1 ] && SVTAV1_PARAMS="${SVTAV1_PARAMS} --hdr10plus-json ${HDR10P}"
-
+    OPTIONS="--input ${BL} --output ${AV1_IVF} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE}"
+    [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
+    [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${BL}" -map 0:v:0 -pix_fmt yuv420p10le -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SVTAV1_PARAMS} --output ${AV1_IVF}
+    ${AV1MEUP2} ${OPTIONS} || fail "Encode failed."
     { set +x; } 2>/dev/null
+
+elif [ -n "${SVTPRESET}" ] || [ -n "${SVTTUNE}" ] || [ -n "${SVTCRF}" ]; then
+    echo "AV1 not enabled, AV1-related settings will not do anything"
 fi
 
-## HEVC
 if [ ${HEVC} -eq 1 ]; then
-    OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${CRF:+--crf $CRF} ${PRESET:+--preset $PRESET} ${TUNE:+--tune $TUNE}"
+    OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $PRESET} ${X265TUNE:+--tune $TUNE}"
     [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "Encode failed."
@@ -404,7 +386,7 @@ if [ ${HEVC} -eq 1 ]; then
         { set +x; } 2>/dev/null
         echo
         ## verify, if requested, you really shouldn't request it tho
-        if [ -n "${VERIFY}" ]; then
+        if [ ${VERIFY} -eq 1 ]; then
             echo ">> Running Dolby Vision stream verifier"; echo
             set -x
             ${DVESVERIFIER} --input ${WITH_RPU} --rpu-compare ${RPU_8} --dv-profile ${DOVIPROFILE#dvhe.0}.${DOVILEVEL#0} --dv-level ${DOVILEVEL#0} --verbose 1 || fail "Dolby Vision verification failed."
@@ -432,8 +414,15 @@ fi
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-[ $AV1 -eq 1 ] && ${MKVMERGE} --output "${REMUXED/mkv/av1.mkv}" "${AV1_IVF}" --no-video "${OTHERTRACKS}" || fail "AV1 merge failed."
-[ $HEVC -eq 1 ] && ${MKVMERGE} --output "${REMUXED/mkv/hevc.mkv}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}" || fail "HEVC merge failed."
+if [ $AV1 -eq 1 ]; then
+    ${MKVMERGE} --output "${REMUXED/mkv/av1.mkv}" "${AV1_IVF}" --no-video "${OTHERTRACKS}"
+    [ $? -eq 0 ] || fail "AV1 merge failed."
+fi
+
+if [ $HEVC -eq 1 ]; then
+    ${MKVMERGE} --output "${REMUXED/mkv/hevc.mkv}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}"
+    [ $? -eq 0 ] || fail "HEVC merge failed."
+fi
 { set +x; } 2>/dev/null
 
 set -x
@@ -443,7 +432,7 @@ ${ADDSTATS} "${OUTPUT}.mkv"
 { set +x; } 2>/dev/null
 echo
 
-if [ -n "${KEEP}" ]; then
+if [ ${KEEP} -eq 1 ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
