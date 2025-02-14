@@ -723,11 +723,15 @@ else
         rm "${OUTPUT/%mkv/audiovise.mkv}"
         { set +x; } 2>/dev/null
     else
-        set -x
-        ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" --no-video "${INPUT}"
-        [ $? -eq 0 ] || fail "## merge error, exiting"
-        rm ${OUTPUT/%mkv/ivf}
-        { set +x; } 2>/dev/null
+        if [[ "${OUTPUT##*.}" == "mkv" ]]; then
+            set -x
+            ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" --no-video "${INPUT}"
+            [ $? -eq 0 ] || fail "## merge error, exiting"
+            rm ${OUTPUT/%mkv/ivf}
+            { set +x; } 2>/dev/null
+        else
+            exit 0
+        fi
     fi
 fi
 
