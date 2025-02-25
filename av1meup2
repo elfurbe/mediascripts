@@ -185,6 +185,10 @@ if [ $DEBUG ]; then
     echo
 fi
 
+if [ ${NOPIPE:-0} -eq 1 ]; then
+    ${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 || fail "ffmpeg does not include libsvtav1"
+fi
+
 if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
     echo "Insufficient options provided."
     echo "Must supply input (-i/--input) and output (-o/--output) at minimum"
@@ -268,27 +272,41 @@ case "${BITDEPTH}" in
         exit 1;;
 esac
 
-VIDEO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
-IFS=$'\n'
-for TRACK in ${VIDEO_TRACKS}; do
-    TRACK_HDR_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.HDR_Format'`
-    if [[ "$TRACK_HDR_FORMAT" != "null" ]]; then
-        [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
-        [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && [ $DEBUG ] && echo "Dolby Vision detected."
-        if [ $SDR ]; then
-            NPL=100
-            METHOD="mobius"
-            DESAT=4
-            RANGE="limited"
-            TONEMAP="zscale=t=linear:npl=${NPL},format=gbrpf32le,tonemap=${METHOD}:param=0.4:desat=${DESAT},zscale=p=bt709:t=bt709:m=bt709:r=${RANGE}"
-            VF="${TONEMAP}${VF:+,${VF}}"
-        else
-            paramsmunge "enable-hdr=1"
-            COPY_HDR=1
-        fi
+VIDEO_TRACK=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
+FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
+HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
+FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
+DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
+DURATION_PRETTY=$(printf '%02d:%02d:%02f' $(echo -e "$DURATION/3600\n$DURATION%3600/60\n$DURATION%60"| bc))
+FRAME_COUNT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameCount')
+BITRATE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate')
+BITRATE_PRETTY="$(echo "scale=2; ${BITRATE} / 1024 / 1024" | ${BC} -l) Mb/s"
+SIZE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.StreamSize')
+SIZE_PRETTY="$(echo "scale=2; ${SIZE} / 1024 / 1024 / 1024" | ${BC} -l) GB"
+echo "Original stream metadata:"
+echo "  fps: ${FPS}"
+echo "  duration: ${DURATION_PRETTY}"
+echo "  frame count: ${FRAME_COUNT}"
+echo "  bitrate: ${BITRATE_PRETTY}"
+echo "  stream size: ${SIZE_PRETTY}"
+[ -n "${HDRFORMAT}" ] && echo "  hdr format: ${HDRFORMAT}"
+[ -n "${FORMATCOMPAT}" ] && echo "  hdr compat: ${FORMATCOMPAT}"
+echo
+if [[ "$HDRFORMAT" != "null" ]]; then
+    [ $DEBUG ] && echo "HDR format video detected: $HDRFORMAT"
+    [[ "$HDRFORMAT" =~ Dolby ]] && [ $DEBUG ] && echo "Dolby Vision detected."
+    if [ $SDR ]; then
+        NPL=100
+        METHOD="mobius"
+        DESAT=4
+        RANGE="limited"
+        TONEMAP="zscale=t=linear:npl=${NPL},format=gbrpf32le,tonemap=${METHOD}:param=0.4:desat=${DESAT},zscale=p=bt709:t=bt709:m=bt709:r=${RANGE}"
+        VF="${TONEMAP}${VF:+,${VF}}"
+    else
+        [ "${SVTAV1_FORK}" == "PSY" ] && paramsmunge "enable-hdr=1"
+        COPY_HDR=1
     fi
-done
-IFS="$O_IFS"
+fi
 
 if [ $CROP ]; then
     echo "## Finding crop..."
@@ -676,11 +694,12 @@ fi
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPCOVERS \"${INPUT}\""
-    if [ $NOPIPE ]; then
+    if [ ${NOPIPE:-0} -eq 1 ]; then
         echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
-        SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+        SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+        [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
     fi
     [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPTAGS \"${OUTPUT}\""
@@ -701,13 +720,14 @@ if [[ "${INPUT##*.}" == "mkv" ]]; then
 fi
 
 echo "## Starting encode..."
-if [ $NOPIPE ]; then
+if [ ${NOPIPE:-0} -eq 1 ]; then
     set -x
     nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete." || fail "encode error."
     { set +x; } 2>/dev/null
 else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
-    SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --progress 3 --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+    SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+    [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}"
     { set +x; } 2>/dev/null
