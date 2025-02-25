@@ -172,8 +172,8 @@ REMUXED="${OUTPUT}.mkv"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
 ## Fetch and echo original video metadata because you always want to know and you n ever know
-FPS=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
+FPS=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
 HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
 DURATION=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
