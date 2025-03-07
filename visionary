@@ -16,6 +16,7 @@ Usage: ${0##*/} -i <INPUT FILE>
 --svtcrf:           set an alternate svt-av1 crf (default: 22)
 --svtpreset:        set an alternate svt-av1 preset (default: 7)
 --svttune:          set an alternate svt-av1 tune (default: 3)
+--svtfilmgrain:     engage svt-av1 grain analysis/reconstruction
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --dual:             Run both an hevc AND an av1 encode in one pass (more efficient)
 --debug:            print debugging information
