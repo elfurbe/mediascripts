@@ -702,8 +702,21 @@ if [ $DEBUG ]; then
         [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
     fi
-    [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPTAGS \"${OUTPUT}\""
-    [[ "${INPUT##*.}" == "mkv" ]] && echo "$ADDSTATS \"${OUTPUT}\""
+    if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
+        echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
+        echo ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" "${OUTPUT/%mkv/audiovise.mkv}"
+        echo rm "${OUTPUT/%mkv/ivf}"
+        echo rm "${OUTPUT/%mkv/audiovise.mkv}"
+    else
+        if [[ "${OUTPUT##*.}" == "mkv" ]]; then
+            echo ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" --no-video "${INPUT}"
+            echo rm ${OUTPUT/%mkv/ivf}
+        fi
+    fi
+    if [[ "${INPUT##*.}" == "mkv" ]] && [[ "${OUTPUT##*.}" == "mkv" ]]; then 
+        echo "$STRIPTAGS \"${OUTPUT}\""
+        echo "$ADDSTATS \"${OUTPUT}\""
+    fi
     #exit
     read -p "Press y to encode, any other key to exit..." confirm
     case $confirm in
