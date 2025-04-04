@@ -206,8 +206,9 @@ if [ -f "$OUTPUT" ]; then
     exit 1
 fi
 
-INPUT_WIDTH=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Width'`
-INPUT_HEIGHT=`$MEDIAINFO --Output=JSON "${INPUT}" | $JQ -r '.media.track[] | select(."@type" == "Video" ).Height'`
+VIDEO_TRACK=`$MEDIAINFO --output=JSON "${INPUT}" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
+INPUT_WIDTH=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Width')
+INPUT_HEIGHT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Height')
 
 if [ $SQUARE ]; then
     VF="scale=iw*sar:ih,setsar=1:1"
@@ -272,7 +273,6 @@ case "${BITDEPTH}" in
         exit 1;;
 esac
 
-VIDEO_TRACK=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
 FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
 HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
