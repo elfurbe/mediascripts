@@ -72,6 +72,8 @@ while [ $# -gt 0 ]; do
         shift;;
     --svtfilmgrain)
         SVTFILMGRAIN=1
+        SVTPRESET=6
+        SVTTUNE=2
         shift;;
     -a|--audio)
         shift
