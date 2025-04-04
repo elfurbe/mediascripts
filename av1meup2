@@ -594,6 +594,15 @@ if [ $COPY_HDR ]; then
             LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
             CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
             paramsmunge "mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}";;
+        bt709)
+            echo ">> bt709 color transfer, (but why)"
+            GREEN="${VIDEO_GREEN_X_BC},${VIDEO_GREEN_Y_BC}"
+            BLUE="${VIDEO_BLUE_X_BC},${VIDEO_BLUE_Y_BC}"
+            RED="${VIDEO_RED_X_BC},${VIDEO_RED_Y_BC}"
+            WHITE_POINT="${VIDEO_WHITE_POINT_X_BC},${VIDEO_WHITE_POINT_Y_BC}"
+            LUMINANCE="${VIDEO_MAX_LUMINANCE_BC},${VIDEO_MIN_LUMINANCE_BC}"
+            CLL="${VIDEO_MAX_CONTENT},${VIDEO_MAX_AVERAGE}"
+            paramsmunge "mastering-display=G(${GREEN})B(${BLUE})R(${RED})WP(${WHITE_POINT})L(${LUMINANCE}):content-light=${CLL}";;
         arib-std-b67)
             echo ">> HLG/ARIB-STD-B67 color transfer";;
         *)
