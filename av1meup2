@@ -168,6 +168,7 @@ SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | head -n1 | awk '{print $2}' | sed '
 SVTAV1_MAJOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $1}')
 SVTAV1_MINOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $2}')
 SVTAV1_PATCH=$(echo ${SVTAV1_VERSION} | awk -F. '{print $3}')
+SVTAV1_FFMPEG=$(${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 &>/dev/null && echo 1 || echo 0)
 
 if [ $DEBUG ]; then
     echo "VARIABLE STATE:"
@@ -179,15 +180,13 @@ if [ $DEBUG ]; then
 
     echo "SVT-AV1 Info:"
     echo "------------------------"
-    for var in SVTAV1_FORK SVTAV1_VERSION; do
+    for var in SVTAV1_FORK SVTAV1_VERSION SVTAV1_FFMPEG; do
         [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "SVT-AV1 INFO" --output-separator " | "
     echo
 fi
 
-if [ ${NOPIPE:-0} -eq 1 ]; then
-    ${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 || fail "ffmpeg does not include libsvtav1"
-fi
+[ ${NOPIPE:-0} -eq 1 ] && [ ${SVTAV1_FFMPEG} -eq 0 ] && fail "ffmpeg does not include libsvtav1"
 
 if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
     echo "Insufficient options provided."
@@ -294,7 +293,17 @@ echo "  stream size: ${SIZE_PRETTY}"
 echo
 if [[ "$HDRFORMAT" != "null" ]]; then
     [ $DEBUG ] && echo "HDR format video detected: $HDRFORMAT"
-    [[ "$HDRFORMAT" =~ Dolby ]] && [ $DEBUG ] && echo "Dolby Vision detected."
+    if [[ "$HDRFORMAT" =~ Dolby ]]; then
+        [ $DEBUG ] && echo "Dolby Vision detected"
+        DOVI=1
+        [ $DEBUG ] && echo "doing ffmpeg native encoding"
+        NOPIPE=1
+        FFMPEG="${FFMPEG} -stats -loglevel warning"
+        if [ $CROP ]; then
+            echo "Cannot crop Dolby Vision streams, disabling crop"
+            unset CROP
+        fi
+    fi
     if [ $SDR ]; then
         NPL=100
         METHOD="mobius"
@@ -617,6 +626,7 @@ if [ ! -z "$EXTRA_PARAMS" ]; then
 fi
 
 VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${SVT_PRESET} -g ${G} -crf ${CRF} -svtav1-params ${PARAMS}"
+[ ${DOVI:-0} -eq 1 ] && VIDEO="$VIDEO -dolbyvision true"
 
 MAPS="-map 0 -map -0:d"
 TRAILERS="-c:s copy -max_muxing_queue_size 9999"
