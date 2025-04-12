@@ -261,7 +261,12 @@ for TRACK in ${VIDEO_TRACKS}; do
     TRACK_HDR_FORMAT=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.HDR_Format'`
     if [[ "$TRACK_HDR_FORMAT" != "null" ]]; then
         [ $DEBUG ] && echo "HDR format video detected: $TRACK_HDR_FORMAT"
-        [[ "$TRACK_HDR_FORMAT" =~ Dolby ]] && echo "Dolby Vision detected. Note that preserving Dolby Vision is beyond the scope of this script."
+        if [[ "$TRACK_HDR_FORMAT" =~ Dolby ]]; then
+            echo "Dolby Vision detected"
+            DOVI=1
+            DOVIBL=1
+            FFMPEG="${FFMPEG} -stats -loglevel warning"
+        fi
         if [ $SDR ]; then
             NPL=100
             METHOD="mobius"
@@ -549,9 +554,8 @@ MAPS="-map 0 -map -0:d"
 VIDEO="-c:V libx265 -pix_fmt $PIXEL_FORMAT -preset $PRESET -x265-params $PARAMS"
 TRAILERS="-c:s copy -max_muxing_queue_size 9999"
 
-if [ ! -z "$TUNE" ]; then
-    VIDEO="$VIDEO -tune:V $TUNE"
-fi
+[ ! -z "$TUNE" ] && VIDEO="$VIDEO -tune:V $TUNE"
+[ ${DOVI:-0} -eq 1 ] && VIDEO="$VIDEO -dolbyvision true"
 
 ENCODE_FLAGS="${MAPS} ${VIDEO} ${AUDIO_FLAGS} ${TRAILERS}"
 
