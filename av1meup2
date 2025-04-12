@@ -11,11 +11,11 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --start:        start time for encode (default: unset)
 --duration:     duration of encode (default: unset)
 --crf:          crf value (default varies with input res, 2160:22, 1080:26, 720: 30, 480: 34)
---svt-preset:   SVT-AV1 preset value (default: 7)
+--svt-preset:   SVT-AV1 preset value
 --preset:       Alias for --svt-preset
 --svt-params:   SVT-AV1 parameters string (default: unset)
 --params:       Alias for --svt-params
---svt-tune:     SVT-AV1 tune value (default: 2)
+--svt-tune:     SVT-AV1 tune value
 --tune:         Alias for --svt-tune
 --fast-decode   Use fast-decode (default: no)
 --film-grain    denoise/synthetic grain tricks (bad for detail, good for bitrate, default 8)
@@ -525,7 +525,13 @@ elif [ -n "${FAST_DECODE}" ] && [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; the
     exit 1
 fi
 
-[ -z "$SVT_PRESET" ] && SVT_PRESET=7
+if [ -z "$SVT_PRESET" ]; then
+    if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+        SVT_PRESET=6
+    else
+        SVT_PRESET=7
+    fi
+fi
 
 if [ -z "$SVT_TUNE" ]; then
     if [ "${SVTAV1_FORK}" == "PSY" ]; then
