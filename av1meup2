@@ -275,8 +275,8 @@ esac
 FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
 HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
-DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
-DURATION_PRETTY=$(printf '%02d:%02d:%02f' $(echo -e "$DURATION/3600\n$DURATION%3600/60\n$DURATION%60"| bc))
+RAW_DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
+DURATION_PRETTY=$(printf '%02d:%02d:%02f' $(echo -e "$RAW_DURATION/3600\n$RAW_DURATION%3600/60\n$RAW_DURATION%60"| bc))
 FRAME_COUNT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameCount')
 BITRATE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate')
 BITRATE_PRETTY="$(echo "scale=2; ${BITRATE} / 1024 / 1024" | ${BC} -l) Mb/s"
