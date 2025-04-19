@@ -16,7 +16,24 @@ fi
 
 for tool in ${TOOLS[@]}; do
     [ "$tool" = "NONE" ] && break
-    VAR="${tool^^}"
+    if [ "$tool" == "sed" ]; then
+        sed --help &>/dev/null
+        if [ $? -ne 0 ]; then
+            gsed --help &>/dev/null
+            if [ $? -eq 0 ]; then
+                VAR="SED"
+                tool="gsed"
+            else
+                echo "This tool requires GNU sed."
+                echo "If you are on a Macintosh computer machine, you can install GNU sed via homebrew with: brew install gnu-sed"
+                exit 1
+            fi
+        else
+            VAR="${tool^^}"
+        fi
+    else
+        VAR="${tool^^}"
+    fi
     if [ -z "${!VAR}" ]; then
         declare "$VAR"=`which $tool 2>/dev/null`
         if [ -z "${!VAR}" ]; then
