@@ -312,7 +312,7 @@ if [[ "$HDRFORMAT" != "null" ]]; then
         TONEMAP="zscale=t=linear:npl=${NPL},format=gbrpf32le,tonemap=${METHOD}:param=0.4:desat=${DESAT},zscale=p=bt709:t=bt709:m=bt709:r=${RANGE}"
         VF="${TONEMAP}${VF:+,${VF}}"
     else
-        [ "${SVTAV1_FORK}" == "PSY" ] && paramsmunge "enable-hdr=1"
+        [ "${SVTAV1_FORK}" == "PSY" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
         COPY_HDR=1
     fi
 fi
