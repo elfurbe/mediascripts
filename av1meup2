@@ -19,6 +19,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --tune:         Alias for --svt-tune
 --fast-decode   Use fast-decode (default: no)
 --film-grain    denoise/synthetic grain tricks (bad for detail, good for bitrate, default 8)
+--psyauce       the psy (rip) project recommends some things, they deffo make bitrate go up
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
 --oprofile:     output profile [2160, 1080, 720, 480]
@@ -81,6 +82,9 @@ while [ $# -gt 0 ]; do
             shift;;
     --film-grain)
             if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; FILM_GRAIN=$1; else FILM_GRAIN=8; fi
+            shift;;
+    --psyauce)
+            PSYAUCE=1
             shift;;
     --crop)
             CROP=1
@@ -533,16 +537,20 @@ if [ -z "$SVT_PRESET" ]; then
     fi
 fi
 
-if [ -z "$SVT_TUNE" ]; then
-    if [ "${SVTAV1_FORK}" == "PSY" ]; then
-        # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
-        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
-        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-        SVT_TUNE=3
-    else
-        # For vanilla SVT-AV1 we'll use tune 2 cause the nerdgods say so
-        # ref: https://wiki.x266.mov/docs/encoders/SVT-AV1#encoder-optimization
-        SVT_TUNE=2
+[ -z "$SVT_TUNE" ] && SVT_TUNE=2
+
+if [ "${SVTAV1_FORK}" == "PSY" ] && [ ${PSYAUCE:-0} -eq 1 ]; then
+    [ $DEBUG ] && echo "Applying the PSYAUCE"
+    # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
+    # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+    [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+    SVT_TUNE=3
+    if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+        # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
+        [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3"
+        [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6"
+        paramsmunge "hbd-mds=1"
+        paramsmunge "spy-rd=1"
     fi
 fi
 
