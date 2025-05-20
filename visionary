@@ -180,6 +180,8 @@ REMUXED="${OUTPUT}.mkv"
 ## Fetch and echo original video metadata because you always want to know and you n ever know
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
 FPS=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
+FPS_NUM=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Num')
+FPS_DEN=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Den')
 HDRFORMAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
 DURATION=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
@@ -226,7 +228,7 @@ if [ ${HDRSUM} -eq 0 ]; then
 fi
 
 echo ">> Original stream metadata:"
-echo "   >> fps: ${FPS}"
+echo "   >> fps: ${FPS} (${FPS_NUM}/${FPS_DEN})"
 echo "   >> duration: ${DURATION_PRETTY}"
 echo "   >> frame count: ${FRAME_COUNT}"
 echo "   >> bitrate: ${BITRATE_PRETTY}"
@@ -376,6 +378,14 @@ echo ">> Starting encode(s)..."; echo
 if [ ${AV1} -eq 1 ]; then
     echo ">> Starting SVT-AV1 encode..."
     OPTIONS="--input ${BL} --output ${AV1_IVF} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE} ${SVTFILMGRAIN:+--film-grain}"
+    if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ]; then
+        OPTIONS="${OPTIONS} --fps ${FPS_NUM}/${FPS_DEN}"
+    elif [ "${FPS}" != "" ]; then
+        OPTIONS="${OPTIONS} --fps ${FPS}"
+    else
+        echo "=> Framerate not detected, that's a problem."
+        exit 1
+    fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
     [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
     set -x
@@ -389,7 +399,15 @@ fi
 
 if [ ${HEVC} -eq 1 ]; then
     echo ">> Starting X265 encode..."
-    OPTIONS="--input ${BL} --output ${BLX265} --fps ${FPS} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $PRESET} ${X265TUNE:+--tune $TUNE}"
+    OPTIONS="--input ${BL} --output ${BLX265} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $PRESET} ${X265TUNE:+--tune $TUNE}"
+    if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ]; then
+        OPTIONS="${OPTIONS} --fps ${FPS_NUM}/${FPS_DEN}"
+    elif [ "${FPS}" != "" ]; then
+        OPTIONS="${OPTIONS} --fps ${FPS}"
+    else
+        echo "=> Framerate not detected, that's a problem."
+        exit 1
+    fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "<> Encode failed."
