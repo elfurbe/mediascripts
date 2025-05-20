@@ -38,6 +38,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --nopipe:       use ffmpeg native encoding instead of pipe
 --rpufile:      Dolby Vision RPU file (cannot use with nopipe)
 --hdr10pfile:   HDR10+ json file (cannot use with nopipe)
+--fps:          For elementary streams without framerate, use this to provide it
 
 EOF
 }
@@ -144,6 +145,59 @@ while [ $# -gt 0 ]; do
             shift
             HDR10PFILE="${1}"
             shift;;
+    --fps)
+            shift
+            FPS=$1
+            case ${FPS} in
+                */*)
+                    FPSARR=(${FPS//\// })
+                    FPS_NUM=${FPSARR[0]}
+                    FPS_DEN=${FPSARR[1]}
+                    unset FPSARR
+                    FPS="$(echo "scale=3;$FPS" | bc -l)";;
+                *.*)
+                    FPSARR=(${FPS//\./ })
+                    FPS_BEFORE=${FPSARR[0]}
+                    FPS_AFTER=${FPSARR[1]}
+                    unset FPSARR
+                    case $FPS_BEFORE in
+                        23)
+                            FPS_NUM="24000"
+                            FPS_DEN="1001";;
+                        24)
+                            FPS_NUM="24"
+                            FPS_DEN="1";;
+                        25)
+                            FPS_NUM="25"
+                            FPS_DEN="1";;
+                        29)
+                            FPS_NUM="30000"
+                            FPS_DEN="1001";;
+                        30)
+                            FPS_NUM="30"
+                            FPS_DEN="1";;
+                        47)
+                            FPS_NUM="48000"
+                            FPS_DEN="1001";;
+                        48)
+                            FPS_NUM="48"
+                            FPS_DEN="1";;
+                        59)
+                            FPS_NUM="60000"
+                            FPS_DEN="1001";;
+                        60)
+                            FPS_NUM="60"
+                            FPS_DEN="1";;
+                        *)
+                            echo "I don't know what ${FPS} is in fractions so I'm exiting."
+                            exit 1;;
+                    esac
+                    FPS="$(echo "scale=3;$FPS_NUM / $FPS_DEN" | bc -l)";;
+                *)
+                    FPS_NUM=${FPS}
+                    FPS_DEN=1;;
+            esac
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -177,7 +231,7 @@ SVTAV1_FFMPEG=$(${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 &>/dev/null && echo 1
 if [ $DEBUG ]; then
     echo "VARIABLE STATE:"
     echo "-------------------------"
-    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE RPUFILE HDR10PFILE; do
+    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP PSYAUCE DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE RPUFILE HDR10PFILE FPS FPS_NUM FPS_DEN; do
         [ -n "${!var}" ] && echo "$var,${!var}" || echo "$var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
@@ -276,7 +330,12 @@ case "${BITDEPTH}" in
         exit 1;;
 esac
 
-FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
+[ -z "${FPS}" ] && FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
+[ "${FPS}" == "null" ] && unset FPS
+[ -z "${FPS_NUM}" ] && FPS_NUM=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Num')
+[ "${FPS_NUM}" == "null" ] && unset FPS_NUM
+[ -z "${FPS_DEN}" ] && FPS_DEN=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Den')
+[ "${FPS_DEN}" == "null" ] && unset FPS_DEN
 HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
 RAW_DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
@@ -286,8 +345,9 @@ BITRATE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate')
 BITRATE_PRETTY="$(echo "scale=2; ${BITRATE} / 1024 / 1024" | ${BC} -l) Mb/s"
 SIZE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.StreamSize')
 SIZE_PRETTY="$(echo "scale=2; ${SIZE} / 1024 / 1024 / 1024" | ${BC} -l) GB"
-echo "Original stream metadata:"
-echo "  fps: ${FPS}"
+
+echo "Input stream metadata:"
+echo "  fps: ${FPS} (${FPS_NUM}/${FPS_DEN})"
 echo "  duration: ${DURATION_PRETTY}"
 echo "  frame count: ${FRAME_COUNT}"
 echo "  bitrate: ${BITRATE_PRETTY}"
@@ -744,7 +804,7 @@ if [ $DEBUG ]; then
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
         [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
-        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -r ${FPS_NUM}/${FPS_DEN} -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
             echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
             echo ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" "${OUTPUT/%mkv/audiovise.mkv}"
@@ -786,7 +846,7 @@ else
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
     [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -r ${FPS_NUM}/${FPS_DEN} -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
         ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
