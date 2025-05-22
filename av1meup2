@@ -148,55 +148,6 @@ while [ $# -gt 0 ]; do
     --fps)
             shift
             FPS=$1
-            case ${FPS} in
-                */*)
-                    FPSARR=(${FPS//\// })
-                    FPS_NUM=${FPSARR[0]}
-                    FPS_DEN=${FPSARR[1]}
-                    unset FPSARR
-                    FPS="$(echo "scale=3;$FPS" | bc -l)";;
-                *.*)
-                    FPSARR=(${FPS//\./ })
-                    FPS_BEFORE=${FPSARR[0]}
-                    FPS_AFTER=${FPSARR[1]}
-                    unset FPSARR
-                    case $FPS_BEFORE in
-                        23)
-                            FPS_NUM="24000"
-                            FPS_DEN="1001";;
-                        24)
-                            FPS_NUM="24"
-                            FPS_DEN="1";;
-                        25)
-                            FPS_NUM="25"
-                            FPS_DEN="1";;
-                        29)
-                            FPS_NUM="30000"
-                            FPS_DEN="1001";;
-                        30)
-                            FPS_NUM="30"
-                            FPS_DEN="1";;
-                        47)
-                            FPS_NUM="48000"
-                            FPS_DEN="1001";;
-                        48)
-                            FPS_NUM="48"
-                            FPS_DEN="1";;
-                        59)
-                            FPS_NUM="60000"
-                            FPS_DEN="1001";;
-                        60)
-                            FPS_NUM="60"
-                            FPS_DEN="1";;
-                        *)
-                            echo "I don't know what ${FPS} is in fractions so I'm exiting."
-                            exit 1;;
-                    esac
-                    FPS="$(echo "scale=3;$FPS_NUM / $FPS_DEN" | bc -l)";;
-                *)
-                    FPS_NUM=${FPS}
-                    FPS_DEN=1;;
-            esac
             shift;;
     -h|--help)
             usage
@@ -336,6 +287,59 @@ esac
 [ "${FPS_NUM}" == "null" ] && unset FPS_NUM
 [ -z "${FPS_DEN}" ] && FPS_DEN=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Den')
 [ "${FPS_DEN}" == "null" ] && unset FPS_DEN
+
+if [ "${FPS_NUM+set}" != set ] || [ "${FPS_DEN+set}" != set ]; then
+    case ${FPS} in
+        */*)
+            FPSARR=(${FPS//\// })
+            FPS_NUM=${FPSARR[0]}
+            FPS_DEN=${FPSARR[1]}
+            unset FPSARR
+            FPS="$(echo "scale=3;$FPS" | bc -l)";;
+        *.*)
+            FPSARR=(${FPS//\./ })
+            FPS_BEFORE=${FPSARR[0]}
+            FPS_AFTER=${FPSARR[1]}
+            unset FPSARR
+            case $FPS_BEFORE in
+                23)
+                    FPS_NUM="24000"
+                    FPS_DEN="1001";;
+                24)
+                    FPS_NUM="24"
+                    FPS_DEN="1";;
+                25)
+                    FPS_NUM="25"
+                    FPS_DEN="1";;
+                29)
+                    FPS_NUM="30000"
+                    FPS_DEN="1001";;
+                30)
+                    FPS_NUM="30"
+                    FPS_DEN="1";;
+                47)
+                    FPS_NUM="48000"
+                    FPS_DEN="1001";;
+                48)
+                    FPS_NUM="48"
+                    FPS_DEN="1";;
+                59)
+                    FPS_NUM="60000"
+                    FPS_DEN="1001";;
+                60)
+                    FPS_NUM="60"
+                    FPS_DEN="1";;
+                *)
+                    echo "I don't know what ${FPS} is in fractions so I'm exiting."
+                    exit 1;;
+            esac
+            FPS="$(echo "scale=3;$FPS_NUM / $FPS_DEN" | bc -l)";;
+        *)
+            FPS_NUM=${FPS}
+            FPS_DEN=1;;
+    esac
+fi
+
 HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
 FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
 RAW_DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
