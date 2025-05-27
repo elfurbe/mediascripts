@@ -214,7 +214,8 @@ if [ -f "$OUTPUT" ]; then
     exit 1
 fi
 
-VIDEO_TRACK=`$MEDIAINFO --output=JSON "${INPUT}" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64'`
+MI_JSON=$($MEDIAINFO --output=JSON "${INPUT}")
+VIDEO_TRACK=$(echo "${MI_JSON}" | $JQ -r '.media.track[] | select (."@type"=="Video") | @base64')
 INPUT_WIDTH=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Width')
 INPUT_HEIGHT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Height')
 
@@ -454,7 +455,7 @@ fi
 if [ $AUDIO ]; then        
     NL=$'\n'
     AUDIO_TRACK_META=""
-    AUDIO_TRACKS=`$MEDIAINFO --output=JSON "$INPUT" | $JQ -r '.media.track[] | select (."@type"=="Audio") | @base64'`
+    AUDIO_TRACKS=$(echo "${MI_JSON}" | $JQ -r '.media.track[] | select (."@type"=="Audio") | @base64')
     IFS=$'\n'
     for TRACK in ${AUDIO_TRACKS}; do
         TRACK_NUMBER=`echo "${TRACK}" | ${BASE64} --decode | $JQ -r '.StreamOrder'`
@@ -725,8 +726,8 @@ if [ ! -z "$START" ]; then
     FFMPEG="$FFMPEG -ss $START"
 fi
 
-SCANTYPE=`$MEDIAINFO "$INPUT" | grep "Scan type " | awk -F:\  '{print $2}'`
-SCANORDER=`$MEDIAINFO "$INPUT" | grep "Scan order " | awk -F:\  '{print $2}'`
+SCANTYPE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanType')
+SCANORDER=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanOrder')
 DEINT_SUM=$(( ${YADIF:-0} + ${NNEDI:-0} ))
 if [ $DEINT_SUM -gt 1 ]; then
     echo "Pick one deinterlace option, not more than one."
