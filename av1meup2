@@ -808,7 +808,7 @@ if [ $DEBUG ]; then
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
         [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
-        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -r ${FPS_NUM}/${FPS_DEN} -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
             echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
             echo ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" "${OUTPUT/%mkv/audiovise.mkv}"
@@ -850,7 +850,7 @@ else
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
     [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i "${INPUT}" -r ${FPS_NUM}/${FPS_DEN} -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
         ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
