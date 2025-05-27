@@ -341,8 +341,6 @@ if [ "${FPS_NUM+set}" != set ] || [ "${FPS_DEN+set}" != set ]; then
     esac
 fi
 
-HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
-FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
 RAW_DURATION=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.Duration')
 DURATION_PRETTY=$(printf '%02d:%02d:%02f' $(echo -e "$RAW_DURATION/3600\n$RAW_DURATION%3600/60\n$RAW_DURATION%60"| bc))
 FRAME_COUNT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameCount')
@@ -350,6 +348,10 @@ BITRATE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.BitRate')
 BITRATE_PRETTY="$(echo "scale=2; ${BITRATE} / 1024 / 1024" | ${BC} -l) Mb/s"
 SIZE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.StreamSize')
 SIZE_PRETTY="$(echo "scale=2; ${SIZE} / 1024 / 1024 / 1024" | ${BC} -l) GB"
+HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
+FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
+SCANTYPE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanType')
+SCANORDER=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanOrder')
 
 echo "Input stream metadata:"
 echo "  fps: ${FPS} (${FPS_NUM}/${FPS_DEN})"
@@ -359,6 +361,8 @@ echo "  bitrate: ${BITRATE_PRETTY}"
 echo "  stream size: ${SIZE_PRETTY}"
 [ -n "${HDRFORMAT}" ] && echo "  hdr format: ${HDRFORMAT}"
 [ -n "${FORMATCOMPAT}" ] && echo "  hdr compat: ${FORMATCOMPAT}"
+[ -n "${SCANTYPE}" ] && echo "  scan type: ${SCANTYPE}"
+[ -n "${SCANORDER}" ] && echo "  scan order: ${SCANORDER}"
 echo
 if [[ "$HDRFORMAT" != "null" ]]; then
     [ $DEBUG ] && echo "HDR format video detected: $HDRFORMAT"
@@ -726,8 +730,6 @@ if [ ! -z "$START" ]; then
     FFMPEG="$FFMPEG -ss $START"
 fi
 
-SCANTYPE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanType')
-SCANORDER=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanOrder')
 DEINT_SUM=$(( ${YADIF:-0} + ${NNEDI:-0} ))
 if [ $DEINT_SUM -gt 1 ]; then
     echo "Pick one deinterlace option, not more than one."
