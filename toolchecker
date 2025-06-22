@@ -11,6 +11,24 @@ if [ ${BASH_VERSION:0:1} -lt 4 ]; then
     exit 1
 fi
 
+# see if a module collection was requested, if it was then we'll try to load up lmod and restore it
+# this is a convenience feature for me, a sicko, it is not a requirement
+# the scripts do not care if this works or not
+if [ -n "${MODULE_COLLECTION}" ]; then
+    [ $DEBUG ] && echo "MODULE_COLLECTION: ${MODULE_COLLECTION}"
+    env | grep BASH_FUNC_m &>/dev/null
+    if [ $? -ne 0 ]; then
+        [ -f /etc/profile.d/lmod.sh ] && source /etc/profile.d/lmod.sh
+    fi
+    ml restore "${MODULE_COLLECTION}" &>/dev/null
+    if [ $? -eq 0 ]; then
+        [ $DEBUG ] && echo "module collection '${MODULE_COLLECTION}' restored"
+        [ $DEBUG ] && ml
+    else
+        [ $DEBUG ] && echo "could not restore module collection '${MODULE_COLLECTION}'"
+    fi
+fi
+
 # Check for tool dependencies
 
 ## External tools
