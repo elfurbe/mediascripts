@@ -139,6 +139,12 @@ while [ $# -gt 0 ]; do
             shift
             FPS="${1}"
             shift;;
+    --pipe)
+            NOPIPE=0
+            shift;;
+    --denoise)
+            DENOISE=1
+            shift;;
     -h|--help)
             usage
             exit;;
@@ -642,7 +648,14 @@ fi
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     [[ "${INPUT##*.}" = ".mkv" ]] && echo "$STRIPCOVERS \"${INPUT}\""
-    echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    if [ ${NOPIPE:-1} -eq 1 ]; then
+        echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
+    else
+        SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
+        [ $CROP ] && SWITCHES="${SWITCHES} --width $width --height $height" || SWITCHES="${SWITCHES} --width $INPUT_WIDTH --height $INPUT_HEIGHT"
+        SWITCHES="${SWITCHES} --preset ${PRESET} --output-depth 10 --fps ${FPS} --input -"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${X265} ${SWITCHES} --output ${OUTPUT/%mkv/hevc}"
+    fi
     [[ "${OUTPUT##*.}" = ".mkv" ]] && echo "$STRIPTAGS \"${OUTPUT}\""
     [[ "${OUTPUT##*.}" = ".mkv" ]] && echo "$ADDSTATS \"${OUTPUT}\""
     #exit
@@ -662,9 +675,15 @@ if [[ "${INPUT##*.}" = ".mkv" ]]; then
 fi
 
 echo "## Starting encode..."
-set -x
-nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete" || fail "## encoding error."
-{ set +x; } 2>/dev/null
+if [ ${NOPIPE:-1} -eq 1 ]; then
+    set -x
+    nice -n 5 $FFMPEG -analyzeduration 100 -probesize 100M -i "$INPUT" $ENCODE_FLAGS "$OUTPUT" && echo "## encode complete" || fail "## encoding error."
+    { set +x; } 2>/dev/null
+else
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${X265} ${SWITCHES} --output ${OUTPUT/%mkv/hevc}
+    exit
+fi
+
 
 if [[ "${OUTPUT##*.}" = ".mkv" ]]; then
     echo "## Stripping tags from \"${OUTPUT}\"..."
