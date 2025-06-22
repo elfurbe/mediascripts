@@ -102,10 +102,9 @@ done
 # Check for tool dependencies
 SELF_FULLPATH=`realpath ${0}`
 SELF_DIR=`dirname ${SELF_FULLPATH}`
-# Override default tool list
+MODULE_COLLECTION="visionary"
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc column)
 [ ${VERIFY} -eq 1 ] && TOOLS+=(dvesverifier)
-# Depends on hevcmeup2 for transcoding
 SCRIPTS=(hevcmeup2 av1meup2 striptags stripcovers addstats)
 [ -n "${AUDIO}" ] && SCRIPTS+=(audiovise)
 
