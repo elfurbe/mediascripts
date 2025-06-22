@@ -283,6 +283,8 @@ for TRACK in ${VIDEO_TRACKS}; do
 done
 IFS="$O_IFS"
 
+[ $FPS ] || FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
+
 if [ $DOVIBL ] && [ $DOVIEL ]; then
     echo "Cannot be both a BL and an EL, ass."
     exit 1
@@ -293,8 +295,6 @@ elif [ $DOVIBL ]; then
     fi
     ## implies copyhdr so we're gonna force it on here just in case we missed it
     COPY_HDR=1
-    ## Probably working with elementary streams in this mode, so we need to set the framerate explicitly
-    [ $FPS ] || FPS=$($MEDIAINFO ${INPUT} --output=JSON | jq -r '.media.track[] | select(."@type" == "Video" ).FrameRate')
     if [ "${FPS}" == "null" ]; then
         echo "framerate not provided and could not be determined from input elementary stream."
         exit 1
