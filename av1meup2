@@ -18,7 +18,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --svt-tune:     SVT-AV1 tune value
 --tune:         Alias for --svt-tune
 --fast-decode   Use fast-decode (default: no)
---film-grain    denoise/synthetic grain tricks (bad for detail, good for bitrate, default 8)
+--film-grain    do synthetic grain juju (default 8, internal de-noise by default)
 --psyauce       the psy (rip) project recommends some things, they deffo make bitrate go up
 --crop:         enable crop detection (default: no)
 --debug:        output commands to be run, run nothing
@@ -39,6 +39,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --rpufile:      Dolby Vision RPU file (cannot use with nopipe)
 --hdr10pfile:   HDR10+ json file (cannot use with nopipe)
 --fps:          For elementary streams without framerate, use this to provide it
+--denoise:      Denoise source with ffmpeg hqdn3d (big bitrate win, detail go bye bye)
 
 EOF
 }
@@ -148,6 +149,9 @@ while [ $# -gt 0 ]; do
     --fps)
             shift
             FPS=$1
+            shift;;
+    --denoise)
+            DENOISE=1
             shift;;
     -h|--help)
             usage
@@ -623,13 +627,19 @@ if [ "${SVTAV1_FORK}" == "PSY" ] && [ ${PSYAUCE:-0} -eq 1 ]; then
     fi
 fi
 
+if [ -n ${DENOISE} ]; then
+    VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
+fi
+
 if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     # technically you can do film grain without denoise but I cannot find a definite answer on whether there's any point in doing so
     # if it doesn't denoise the input frames, you're not getting any of the bitrate value of doing this, but you're still paying
     # the compute-time penalty to analyze the frame for grain characteristics, so I don't know why you'd do one without the other
     # ergo if you ask for film-grain you're getting film-grain-denoise also. If you _KNOW_ why you would want to do
     # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
-    paramsmunge "film-grain=${FILM_GRAIN}:film-grain-denoise=1" after
+    paramsmunge "film-grain=${FILM_GRAIN}" after
+    # if we're using ffmpeg native denoising then there's no reason to _also_ do this denoising
+    [ -z ${DENOISE+x} ] && paramsmunge "film-grain-denoise=1" after
     # I _think_ the PSY encoder enables this automatically but I'm not positive
     [ "${SVTAV1_FORK}" == "PSY" ] && [ "${SVTAV1_MAJOR}" -le 2 ] && paramsmunge "adaptive-film-grain=1" after
     if [ ${SVT_PRESET} -gt 6 ]; then
