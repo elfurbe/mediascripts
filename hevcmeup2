@@ -516,6 +516,10 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
+if [ -n ${DENOISE} ]; then
+    VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
+fi
+
 if [ $MELTON ]; then
     echo "I'm disabling this for now cause I never use it and I don't want to account for it anymore. Sorry."
     #if [ ! -z "${MELTON_BITRATE}" ]; then 
