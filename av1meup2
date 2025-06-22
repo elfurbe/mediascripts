@@ -646,7 +646,7 @@ if [ $COPY_HDR ]; then
     ## REFERENCES
     # https://codecalamity.com/encoding-uhd-4k-hdr10-videos-with-ffmpeg/
     ## THIS IS A DANK ASS TRICK THAT MAKES VARIABLES OUT OF ALL THE VIDEO METADATA
-    eval "$($FFPROBE -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/^\(.*\)\ \(.*\):/\1_\2:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/\(.*\)"\(.*\)\ \(.*\)":/\1"\2_\3":/g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
+    eval "$($FFPROBE -analyzeduration 100 -probesize 100M -hide_banner -loglevel warning -select_streams v -print_format json -show_frames -read_intervals "%+#1" -show_entries "frame=hdr_format,color_range,color_space,color_primaries,color_transfer,side_data_list,pix_fmt" -i "${INPUT}" | ${GREP} -v -e frames -e '{' -e '\[' -e '}' -e '\]' -e 'side' | ${SED} -e 's/^\ *//g' -e 's/^"//g' -e 's/\":/:/g' -e 's/^\(.*\)\ \(.*\):\"/\1_\2:/g' -e 's/:\ /=/g' -e 's/,//g' -e 's/\(.*\)"\(.*\)\ \(.*\)":/\1"\2_\3":/g' -e 's/^/video_/g' -e 's/^.*=/\U&/g')"
 
     VIDEO_COLOR_SPACE_FIXED="${VIDEO_COLOR_SPACE/nc/-ncl}"
 
