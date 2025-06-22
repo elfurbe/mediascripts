@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+[ $DEBUG ] && echo "<=> toolchecker checkin' for tools" && echo
+
 # check bash version up front, I use some pretty modern dumb tricks, apparently
 if [ ${BASH_VERSION:0:1} -lt 4 ]; then
     echo "These scripts require bash version 4.0 or newer for arcane nonsense reasons."
@@ -97,4 +99,5 @@ paramsmunge() {
 
 PARAMS=
 
+[ $DEBUG ] && echo && echo "<=> toolchecker complete"
 [ $DEBUG ] && echo
