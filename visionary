@@ -75,7 +75,7 @@ while [ $# -gt 0 ]; do
         SVTTUNE="${1}"
         shift;;
     --svtfilmgrain)
-        SVTFILMGRAIN=1
+        if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; SVTFILMGRAIN=$1; else SVTFILMGRAIN=8; fi
         SVTPRESET=6
         SVTTUNE=2
         shift;;
@@ -380,7 +380,8 @@ echo ">> Starting encode(s)..."; echo
 
 if [ ${AV1} -eq 1 ]; then
     echo ">> Starting SVT-AV1 encode..."
-    OPTIONS="--input ${BL} --output ${AV1_IVF} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE} ${SVTFILMGRAIN:+--film-grain}"
+    OPTIONS="--input ${BL} --output ${AV1_IVF}"
+    OPTIONS="${OPTIONS} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE} ${SVTFILMGRAIN:+--film-grain $SVTFILMGRAIN}"
     if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ]; then
         OPTIONS="${OPTIONS} --fps ${FPS_NUM}/${FPS_DEN}"
     elif [ "${FPS}" != "" ]; then
