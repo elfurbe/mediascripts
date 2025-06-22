@@ -216,7 +216,7 @@ if [ ${DEBUG:-0} -eq 1 ]; then
         [ -n "${!var}" ] && echo "<< $var,${!var}" || echo "<< $var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
-    read -p "<< Press y to encode, any other key to exit..." confirm
+    read -p "<> Press y to encode, any other key to exit..." confirm
     case $confirm in
         [Yy] ) true;;
         * ) exit;;
