@@ -29,6 +29,7 @@ HEVC=1
 AV1=0
 KEEP=0
 VERIFY=0
+DENOISE=0
 
 while [ $# -gt 0 ]; do
     OPT="${1}"
