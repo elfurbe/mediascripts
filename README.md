@@ -58,8 +58,8 @@ My assorted media manipulation scripts
 ## av1meup2/hevcmeup2
 ### What even is this
 av1meup2/hevcmeup2 is the shiniest turd jewel in this shiny turd crown. I transcode a lot of video files for space saving reasons, specifically into yuv420p10le (yes even SDR files, do not at me). I got very, very tired of hand-massaging ffmpeg command lines so I built my own wrapper to solve my specific problems. It started out quite simple, back before it had a `2` in the name. Now it's a complete bloody nightmare of bash nonsense, just absolute fucking chaos of bashisms. If you can read this whole script and not need to look up a single convoluted bash tricknique, your service to the secret fire has clearly been both lengthy and arduous.
-### How do I use it
-Look, and I'm being real here. Probably don't. But if you decide to use it, it has help, specifically this
+### How to use it
+Look, and I'm being real here: probably don't. But if you decide to use it, it has help, specifically this
 ```bash
 Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 
@@ -69,7 +69,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --start:       start time for encode (default: unset)
 --duration:    duration of encode (default: unset)
 --crf:         crf value (default varies with input res, 1080:18, 720: 22, 480: 26)
---melton:      use Don Melton's trickeration for bitrate control
+--melton:      use bitrate control method described by Lisa Melton
 --mbitrate:    if using --melton, use this bitrate cap
 --preset:      x265 preset value (default: medium)
 --tune:        x265 tune value (default: unset)
