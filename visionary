@@ -383,7 +383,7 @@ if [ ${AV1} -eq 1 ]; then
     echo ">> Starting SVT-AV1 encode..."
     OPTIONS="--input ${BL} --output ${AV1_IVF}"
     OPTIONS="${OPTIONS} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE} ${SVTFILMGRAIN:+--film-grain $SVTFILMGRAIN}"
-    if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ]; then
+    if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ] && [ "${FPS_NUM}" != "null" ] && [ "${FPS_DEN}" != "null" ]; then
         OPTIONS="${OPTIONS} --fps ${FPS_NUM}/${FPS_DEN}"
     elif [ "${FPS}" != "" ]; then
         OPTIONS="${OPTIONS} --fps ${FPS}"
