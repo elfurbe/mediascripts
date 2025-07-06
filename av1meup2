@@ -627,7 +627,7 @@ if [ "${SVTAV1_FORK}" == "PSY" ] && [ ${PSYAUCE:-0} -eq 1 ]; then
     fi
 fi
 
-if [ -n ${DENOISE} ]; then
+if [ -n "${DENOISE}" ]; then
     VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
 fi
 
