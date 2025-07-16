@@ -83,7 +83,7 @@ if [ $DEBUG ]; then
     echo "Frameskip: $FRAMESKIP"
     echo "Seconds per frame: $SPF"
     echo "Framedir: $FRAMEDIR"
-    echo $FFMPEG -i "$INPUT" -vf fps=1/$SPF "${FRAMEDIR}/frame%04d.png"
+    echo nice -n 5 $FFMPEG -i "$INPUT" -vf fps=1/$SPF "${FRAMEDIR}/frame%04d.png"
     read -p "Press y to continue, any other key to exit..." confirm
     case $confirm in
         [Yy] ) true;;
@@ -93,4 +93,4 @@ fi
 mkdir "$FRAMEDIR"
 #echo "$FFMPEG -i \"$INPUT\" -vf select=\"not(mod(n\,$FRAMESKIP))\",setpts=N/TB -r 1 -vframes $FRAMES ${FRAMEDIR}/inputframes%03d.png"
 #$FFMPEG -i "$INPUT" -vf select="not(mod(n\,$FRAMESKIP))",setpts=N/TB -r 1 -vframes $FRAMES "${FRAMEDIR}/inputframes%03d.png"
-$FFMPEG -i "$INPUT" -vf fps=1/$SPF "${FRAMEDIR}/frame%04d.png"
+nice -n 5 $FFMPEG -i "$INPUT" -vf fps=1/$SPF "${FRAMEDIR}/frame%04d.png"
