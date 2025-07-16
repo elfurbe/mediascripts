@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
         VERIFY=1
         shift;;
     --denoise)
-        DENOISE=1
+        if [ -n "$2" ] && [ "$2" == "$2" ] 2>/dev/null; then shift; DENOISE=$1; else DENOISE=all; fi
         shift;;
     --x265crf)
         shift
@@ -393,7 +393,9 @@ if [ ${AV1} -eq 1 ]; then
     fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
     [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
-    [ ${DENOISE} -eq 1 ] && OPTIONS="${OPTIONS} --denoise"
+    if [ "${denoise}" == "all" ] || [ "${denoise}" == "svt" ]; then
+        options="${options} --denoise"
+    fi
     set -x
     ${AV1MEUP2} ${OPTIONS} || fail "<> Encode failed."
     { set +x; } 2>/dev/null
@@ -415,7 +417,9 @@ if [ ${HEVC} -eq 1 ]; then
         exit 1
     fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
-    [ ${DENOISE} -eq 1 ] && OPTIONS="${OPTIONS} --denoise"
+    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "x265" ]; then
+        OPTIONS="${OPTIONS} --denoise"
+    fi
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "<> Encode failed."
     { set +x; } 2>/dev/null
