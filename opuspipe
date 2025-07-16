@@ -70,7 +70,7 @@ echo "------------------"
 echo "Track,Codec,BitRate,Channels,Layout,Format,CompMode${NL}${TRACK_META}" | ${COLUMN} -t -s, -o " | "
 echo
 
-BR=$(echo "${TRACK_LAYOUT}" | ${SED} -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~M\|Cb\|C\|L\|R~128~g' -e 's~\ ~\+~g' | ${BC})
+BR=$(echo "${TRACK_LAYOUT}" | ${SED} -e 's~Rss\|Lss\|Rb\|Lb\|Rs\|Ls\|LFE~64~g' -e 's~M\|Cb\|C\|L\|R~128~g' -e 's~\ Objects~~g' -e 's~\ ~\+~g' | ${BC})
 OUTPUT_TRACK_META="opus,${BR}k,${TRACK_CHANNELS},${TRACK_LAYOUT}${NL}"
 echo
 echo "Output Audio Track"
