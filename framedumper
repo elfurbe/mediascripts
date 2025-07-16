@@ -2,7 +2,7 @@
 
 usage() {
 cat - <<EOF
-Usage: $NAME -i <INPUT FILE> -o <OUTPUT FILE>
+Usage: $NAME -i <INPUT FILE>
 
 -h|--help:      show this help message
 -i|--input:     file name for input
