@@ -398,6 +398,7 @@ if [ $CROP ]; then
     echo "## Finding crop..."
     SEGMENTS=10
     CFOUTPUT=$($CROPFINDER -i "$INPUT" -s $SEGMENTS -d)
+    [ $? -ne 0 ] && echo "<> cropfinder failed" && echo "<> cropfinder output: " && fail "$CFOUTPUT"
 
     [ $DEBUG ] && echo "$CFOUTPUT"
     CROP=$(echo "$CFOUTPUT" | tail -n1)
