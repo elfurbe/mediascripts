@@ -242,7 +242,7 @@ echo ">> Starting Dolby Vision/HDR10+ transcode"; echo
 
 echo ">> Making named pipe"; echo
 set -x
-${MKFIFO} "${FIFO}"
+${MKFIFO} "${FIFO}" || fail "<> Named pipe creation failed"
 { set +x; } 2>/dev/null
 echo
 
@@ -393,8 +393,8 @@ if [ ${AV1} -eq 1 ]; then
     fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
     [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
-    if [ "${denoise}" == "all" ] || [ "${denoise}" == "svt" ]; then
-        options="${options} --denoise"
+    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "svt" ]; then
+        OPTIONS="${OPTIONS} --denoise"
     fi
     set -x
     ${AV1MEUP2} ${OPTIONS} || fail "<> Encode failed."
