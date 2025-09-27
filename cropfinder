@@ -49,7 +49,7 @@ done
 SELF_FULLPATH=$(realpath $0)
 SELF_DIR=$(dirname $SELF_FULLPATH)
 # Override default tool list
-TOOLS=(ffmpeg ffprobe grep awk sort uniq head tail)
+TOOLS=(ffmpeg ffprobe grep awk sed sort uniq head tail)
 # Does not depend on any other scripts
 SCRIPTS=NONE
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -80,22 +80,33 @@ else
 fi
 
 DUR=$($FFPROBE "$INPUT" 2>&1 | $GREP -e DURATION -e Duration | $HEAD -n1 | $AWK -F': ' '{print $2}' | $AWK -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | $AWK -F. '{print $1}')
-[ $DEBUG ] && echo "Duration: $DUR"
-if [ $DUR -le 0 ]; then
-    echo "Unknown duration."
-    exit 1
+if [ $DUR -gt 0 ]; then
+    [ $DEBUG ] && echo "Duration: $DUR"
+    DUR_TRIM=$((DUR - 600))
+    SPLIT=$(($DUR_TRIM / $SAMPLES))
+    [ $DEBUG ] && echo "Sample length: $SPLIT"
+    #CROPDETECT="cropdetect=24:16:0"
+    CROPDETECT="cropdetect=.1:16:0"
+    ALL_CROPS=""
+    for i in $(seq 1 $SAMPLES); do
+        START=$(($SPLIT * ${i}))
+        CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 | $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
+        [ $DEBUG ] && echo -e "Segment start: $START\t$CROP"
+        ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
+    done
+    CROP=$(echo "$ALL_CROPS" | $SORT -t "=" -k 2 | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
+else
+    [ $DEBUG ] && echo "Unusable duration, using 5m frame skip method (less good, super slow)"
+    RATE=$($FFPROBE "$INPUT" 2>&1 | $GREP tbr | $AWK -F,\  '{print $6}' | $SED 's/\ tbr//g')
+    #CROPDETECT="cropdetect=24:16:0"
+    CROPDETECT="cropdetect=.1:16:0"
+    ALL_CROPS=""
+    for i in $(seq 1 $SAMPLES); do
+        START=$(echo "scale=0;$i * 300 * $RATE / 1" | bc -l)
+        CROP=$($FFMPEG -i "$INPUT" -vframes 360 -vf select="gte(n\, $START)","$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 | $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
+        [ $DEBUG ] && echo -e "Starting frame number: $START\t$CROP"
+        ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
+    done
+    CROP=$(echo "$ALL_CROPS" | $SORT -t "=" -k 2 | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
 fi
-DUR_TRIM=$((DUR - 600))
-SPLIT=$(($DUR_TRIM / $SAMPLES))
-[ $DEBUG ] && echo "Sample length: $SPLIT"
-#CROPDETECT="cropdetect=24:16:0"
-CROPDETECT="cropdetect=.1:16:0"
-ALL_CROPS=""
-for i in $(seq 1 $SAMPLES); do
-    START=$(($SPLIT * ${i}))
-    CROP=$($FFMPEG -ss $START -i "$INPUT" -vframes 360 -vf "$CROPDETECT" -f null -max_muxing_queue_size 9999 - 2>&1 | $GREP -o crop=.* | $SORT | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
-    [ $DEBUG ] && echo -e "Segment start: $START\t$CROP"
-    ALL_CROPS="$ALL_CROPS"$'\n'"$CROP"
-done
-CROP=$(echo "$ALL_CROPS" | $SORT -t "=" -k 2 | $UNIQ -c | $SORT -n | $TAIL -n1 | $AWK '{print $2}')
 echo "$CROP"

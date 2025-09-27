@@ -295,10 +295,6 @@ if [ $DOVIBL ] && [ $DOVIEL ]; then
     echo "Cannot be both a BL and an EL, ass."
     exit 1
 elif [ $DOVIBL ]; then
-    if [ $CROP ]; then
-        echo "Cannot crop Dolby Vision streams, disabling crop"
-        unset CROP
-    fi
     ## implies copyhdr so we're gonna force it on here just in case we missed it
     COPY_HDR=1
     if [ "${FPS}" == "null" ]; then
@@ -307,10 +303,6 @@ elif [ $DOVIBL ]; then
     fi
     paramsmunge "level-idc=5.1:high-tier=1:hrd=1:hrd-concat=1:info=1:fps=${FPS}:vbv-bufsize=85000:vbv-maxrate=85000:uhd-bd=1"
 elif [ $DOVIEL ]; then
-    if [ $CROP ]; then
-        echo "Cannot crop Dolby Vision streams, disabling crop"
-        unset CROP
-    fi
     ## implies copyhdr so we're gonna force it on here just in case
     COPY_HDR=1
     ## Probably working with elementary streams in this mode, so we need to set the framerate explicitly

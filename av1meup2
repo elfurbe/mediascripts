@@ -376,10 +376,6 @@ if [[ "$HDRFORMAT" != "null" ]]; then
         [ $DEBUG ] && echo "doing ffmpeg native encoding"
         NOPIPE=1
         FFMPEG="${FFMPEG} -stats -loglevel warning"
-        if [ $CROP ]; then
-            echo "Cannot crop Dolby Vision streams, disabling crop"
-            unset CROP
-        fi
     fi
     if [ $SDR ]; then
         NPL=100
