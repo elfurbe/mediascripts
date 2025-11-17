@@ -176,11 +176,18 @@ else
 fi
 
 ## figure out which fork/version of SVT-AV1 we're dealing with
-SVTAV1_FORK=$(${SVTAV1ENCAPP} --version | grep PSY &>/dev/null && echo "PSY" || echo "mainline")
-SVTAV1_VERSION=$(${SVTAV1ENCAPP} --version | head -n1 | awk '{print $2}' | sed 's/^v//g')
+SVTAV1_VERSION_STR=$(${SVTAV1ENCAPP} --version)
+case "${SVTAV1_VERSION_STR}" in
+    *"PSYEX"*) SVTAV1_FORK="PSYEX"; AV1_DOVI_SUPPORT=1;;
+    *"PSY"*) SVTAV1_FORK="PSY"; AV1_DOVI_SUPPORT=1;;
+    *"HDR"*) SVTAV1_FORK="HDR"; AV1_DOVI_SUPPORT=1;;
+    *) SVTAV1_FORK="mainline"; AV1_DOVI_SUPPORT=0;;
+esac
+SVTAV1_VERSION=$(echo "${SVTAV1_VERSION_STR}" | head -n1 | awk '{print $2}' | sed 's/^v//g')
 SVTAV1_MAJOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $1}')
 SVTAV1_MINOR=$(echo ${SVTAV1_VERSION} | awk -F. '{print $2}')
 SVTAV1_PATCH=$(echo ${SVTAV1_VERSION} | awk -F. '{print $3}')
+
 SVTAV1_FFMPEG=$(${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 &>/dev/null && echo 1 || echo 0)
 
 if [ $DEBUG ]; then
