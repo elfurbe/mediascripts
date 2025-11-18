@@ -96,6 +96,9 @@ while [ $# -gt 0 ]; do
     --crop)
         CROP=1
         shift;;
+    --no-module-restore)
+        NOMODULERESTORE=1
+        shift;;
     --debug)
         DEBUG=1
         shift;;
@@ -112,7 +115,7 @@ done
 # Check for tool dependencies
 SELF_FULLPATH=`realpath ${0}`
 SELF_DIR=`dirname ${SELF_FULLPATH}`
-MODULE_COLLECTION="visionary"
+[ ${NOMODULERESTORE:-0} -eq 0 ] && MODULE_COLLECTION="visionary"
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc column)
 [ ${VERIFY} -eq 1 ] && TOOLS+=(dvesverifier)
 SCRIPTS=(hevcmeup2 av1meup2 striptags stripcovers addstats cropfinder)
