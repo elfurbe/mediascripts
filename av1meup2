@@ -389,7 +389,7 @@ if [[ "$HDRFORMAT" != "null" ]]; then
         TONEMAP="zscale=t=linear:npl=${NPL},format=gbrpf32le,tonemap=${METHOD}:param=0.4:desat=${DESAT},zscale=p=bt709:t=bt709:m=bt709:r=${RANGE}"
         VF="${TONEMAP}${VF:+,${VF}}"
     else
-        [ "${SVTAV1_FORK}" == "PSY" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
+        [ "${SVTAV1_FORK}" != "mainline" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
         COPY_HDR=1
     fi
 fi
@@ -612,7 +612,9 @@ if [ -z "$SVT_PRESET" ]; then
 fi
 
 if [ "${SVTAV1_FORK}" == "PSY" ]; then
+    [ $DEBUG ] && echo "SVT-AV1-PSY detected."
     paramsmunge "enable-dlf=2" after
+
     if [ ${PSYAUCE:-0} -eq 1 ]; then
         [ $DEBUG ] && echo "Applying the PSYAUCE"
         # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
@@ -629,10 +631,50 @@ if [ "${SVTAV1_FORK}" == "PSY" ]; then
     fi
 fi
 
-if [ "${SVTAV1_FORK}" == "HDR" ]; then
+if [ "${SVTAV1_FORK}" == "PSYEX" ]; then
+    [ $DEBUG ] && echo "SVT-AV1-PSYEX detected."
     paramsmunge "enable-dlf=2" after
-    [ "${HDRTC}" == "PQ" ] && paramsmunge "variance-boost-curve=3" after
-    [ -z "${SVT_TUNE}" ] && SVT_TUNE=3
+
+    if [ ${PSYAUCE:-0} -eq 1 ]; then
+        [ $DEBUG ] && echo "Applying the PSYAUCE"
+        # SVT-AV1-PSYEX has a third tune option aimed at subjective visual quality at the expense of metrics performance
+        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+        SVT_TUNE=3
+        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+            # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
+            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+            paramsmunge "hbd-mds=1" after
+            paramsmunge "spy-rd=1" after
+        fi
+    fi
+fi
+
+if [ "${SVTAV1_FORK}" == "HDR" ]; then
+    [ $DEBUG ] && echo "SVT-AV1-HDR detected."
+    [ $DEBUG ] && echo "Enabling deblocking loop filter."
+    paramsmunge "enable-dlf=2" after
+
+    if [ "${HDRTC}" == "PQ" ]; then
+        [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
+        paramsmunge "variance-boost-curve=3" after
+    fi
+    if [ ${PSYAUCE:-0} -eq 1 ]; then
+        [ $DEBUG ] && echo "Applying the PSYAUCE"
+        # SVT-AV1-HDR has a third tune option inherited from the PSY fork. They say it's
+        # An opinionated tune optimized for film grain retention and temporal consistency. The recommended CRF range to use tune 3 is 20 to 40.
+        [ $DEBUG ] && echo "Enabling tune 3."
+        [ -z "${SVT_TUNE}" ] && SVT_TUNE=3
+        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+            paramsmunge "hbd-mds=1" after
+            paramsmunge "spy-rd=1" after
+            paramsmunge "noise-adaptive-filtering=1" after
+            paramsmunge "complex-hvs=1" after
+        fi
+    fi
 fi
 
 [ -z "$SVT_TUNE" ] && SVT_TUNE=2
@@ -664,7 +706,7 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
 fi
 
 #paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
-paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0" after
+paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=4" after
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
@@ -698,7 +740,7 @@ if [ $COPY_HDR ]; then
     paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}"
     paramsmunge "transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
     paramsmunge "matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
-    #
+
     ## parameters specific to color transfers
     case "${VIDEO_COLOR_TRANSFER}" in
         smpte2084)
@@ -834,7 +876,7 @@ if [ $DEBUG ]; then
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
-        [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
+        [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
             echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
@@ -875,7 +917,7 @@ if [ ${NOPIPE:-0} -eq 1 ]; then
 else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
-    [ "${SVTAV1_FORK}" == "PSY" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
+    [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
     { set +x; } 2>/dev/null
