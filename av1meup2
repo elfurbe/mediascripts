@@ -665,14 +665,13 @@ if [ "${SVTAV1_FORK}" == "HDR" ]; then
         # SVT-AV1-HDR has a third tune option inherited from the PSY fork. They say it's
         # An opinionated tune optimized for film grain retention and temporal consistency. The recommended CRF range to use tune 3 is 20 to 40.
         [ $DEBUG ] && echo "Enabling tune 3."
-        [ -z "${SVT_TUNE}" ] && SVT_TUNE=3
+        SVT_TUNE=3
         if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
-            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+            paramsmunge "noise-norm-strength=3" after
             paramsmunge "hbd-mds=1" after
             paramsmunge "spy-rd=1" after
-            paramsmunge "noise-adaptive-filtering=1" after
             paramsmunge "complex-hvs=1" after
+            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "ac-bias=2.0" after
         fi
     fi
 fi
