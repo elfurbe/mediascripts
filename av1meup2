@@ -611,22 +611,31 @@ if [ -z "$SVT_PRESET" ]; then
     fi
 fi
 
-[ -z "$SVT_TUNE" ] && SVT_TUNE=2
-
-if [ "${SVTAV1_FORK}" == "PSY" ] && [ ${PSYAUCE:-0} -eq 1 ]; then
-    [ $DEBUG ] && echo "Applying the PSYAUCE"
-    # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
-    # It's experimental but they consider it better so we'll use it if you're using the PSY branch
-    [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-    SVT_TUNE=3
-    if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-        # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
-        [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3"
-        [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6"
-        paramsmunge "hbd-mds=1"
-        paramsmunge "spy-rd=1"
+if [ "${SVTAV1_FORK}" == "PSY" ]; then
+    paramsmunge "enable-dlf=2" after
+    if [ ${PSYAUCE:-0} -eq 1 ]; then
+        [ $DEBUG ] && echo "Applying the PSYAUCE"
+        # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
+        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+        SVT_TUNE=3
+        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+            # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
+            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+            paramsmunge "hbd-mds=1" after
+            paramsmunge "spy-rd=1" after
+        fi
     fi
 fi
+
+if [ "${SVTAV1_FORK}" == "HDR" ]; then
+    paramsmunge "enable-dlf=2" after
+    [ "${HDRTC}" == "PQ" ] && paramsmunge "variance-boost-curve=3" after
+    [ -z "${SVT_TUNE}" ] && SVT_TUNE=3
+fi
+
+[ -z "$SVT_TUNE" ] && SVT_TUNE=2
 
 if [ -n "${DENOISE}" ]; then
     VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
