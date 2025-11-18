@@ -648,10 +648,15 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     # ergo if you ask for film-grain you're getting film-grain-denoise also. If you _KNOW_ why you would want to do
     # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
     paramsmunge "film-grain=${FILM_GRAIN}" after
-    # if we're using ffmpeg native denoising then there's no reason to _also_ do this denoising
-    [ -z ${DENOISE+x} ] && paramsmunge "film-grain-denoise=1" after
-    # I _think_ the PSY encoder enables this automatically but I'm not positive
-    [ "${SVTAV1_FORK}" == "PSY" ] && [ "${SVTAV1_MAJOR}" -le 2 ] && paramsmunge "adaptive-film-grain=1" after
+    paramsmunge "film-grain-denoise=1" after
+
+    # we don't want to use the native denoiser if we're doing this
+    unset DENOISE
+
+    # all the forks support this, ostensibly it's defaulted to 1 but I'm not sure so here we are
+    [ "${SVTAV1_FORK}" != "mainline" ] && paramsmunge "adaptive-film-grain=1" after
+
+    # the nerds say preset 7+ is bad for the film grain juju
     if [ ${SVT_PRESET} -gt 6 ]; then
         echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
         SVT_PRESET=6
@@ -660,7 +665,6 @@ fi
 
 #paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
 paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0" after
-[ "${SVTAV1_FORK}" == "PSY" ] && paramsmunge "enable-dlf=2" after
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
