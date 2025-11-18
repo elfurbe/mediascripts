@@ -21,6 +21,7 @@ Usage: ${0##*/} -i <INPUT FILE>
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --dual:             Run both an hevc AND an av1 encode in one pass (more efficient)
 --crop:             crop input video, remove offsets from dovi RPUs (no HDR10+)
+--no-module:        disable loading of visionary module set 
 --debug:            print debugging information
 
 EOF
@@ -96,7 +97,7 @@ while [ $# -gt 0 ]; do
     --crop)
         CROP=1
         shift;;
-    --no-module-restore)
+    --no-module)
         NOMODULERESTORE=1
         shift;;
     --debug)
