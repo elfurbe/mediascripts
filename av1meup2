@@ -612,70 +612,73 @@ if [ -z "$SVT_PRESET" ]; then
     fi
 fi
 
-if [ "${SVTAV1_FORK}" == "PSY" ]; then
-    [ $DEBUG ] && echo "SVT-AV1-PSY detected."
-    paramsmunge "enable-dlf=2" after
+case "${SVTAV1_FORK}" in
+    "PSY")
+        [ $DEBUG ] && echo "SVT-AV1-PSY detected."
+        paramsmunge "enable-dlf=2" after
 
-    if [ ${PSYAUCE:-0} -eq 1 ]; then
-        [ $DEBUG ] && echo "Applying the PSYAUCE"
-        # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
-        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
-        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-        SVT_TUNE=3
-        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-            # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
-            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
-            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
-            paramsmunge "hbd-mds=1" after
-            paramsmunge "spy-rd=1" after
+        if [ ${PSYAUCE:-0} -eq 1 ]; then
+            [ $DEBUG ] && echo "Applying the PSYAUCE"
+            # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
+            # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+            [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+            SVT_TUNE=3
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
+                [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+                [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+                paramsmunge "hbd-mds=1" after
+                paramsmunge "spy-rd=1" after
+            fi
+        fi;;
+    "PSYEX")
+        [ $DEBUG ] && echo "SVT-AV1-PSYEX detected."
+        paramsmunge "enable-dlf=2" after
+
+        if [ ${PSYAUCE:-0} -eq 1 ]; then
+            [ $DEBUG ] && echo "Applying the PSYAUCE"
+            # SVT-AV1-PSYEX has a third tune option aimed at subjective visual quality at the expense of metrics performance
+            # It's experimental but they consider it better so we'll use it if you're using the PSY branch
+            [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
+            SVT_TUNE=3
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
+                [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+                [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
+                paramsmunge "hbd-mds=1" after
+                paramsmunge "spy-rd=1" after
+            fi
+        fi;;
+    "HDR")
+        [ $DEBUG ] && echo "SVT-AV1-HDR detected."
+        [ $DEBUG ] && echo "Enabling deblocking loop filter."
+        paramsmunge "enable-dlf=2" after
+
+        if [ "${HDRTC}" == "PQ" ]; then
+            [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
+            paramsmunge "variance-boost-curve=3" after
         fi
-    fi
-fi
-
-if [ "${SVTAV1_FORK}" == "PSYEX" ]; then
-    [ $DEBUG ] && echo "SVT-AV1-PSYEX detected."
-    paramsmunge "enable-dlf=2" after
-
-    if [ ${PSYAUCE:-0} -eq 1 ]; then
-        [ $DEBUG ] && echo "Applying the PSYAUCE"
-        # SVT-AV1-PSYEX has a third tune option aimed at subjective visual quality at the expense of metrics performance
-        # It's experimental but they consider it better so we'll use it if you're using the PSY branch
-        [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-        SVT_TUNE=3
-        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-            # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
-            [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
-            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
-            paramsmunge "hbd-mds=1" after
-            paramsmunge "spy-rd=1" after
-        fi
-    fi
-fi
-
-if [ "${SVTAV1_FORK}" == "HDR" ]; then
-    [ $DEBUG ] && echo "SVT-AV1-HDR detected."
-    [ $DEBUG ] && echo "Enabling deblocking loop filter."
-    paramsmunge "enable-dlf=2" after
-
-    if [ "${HDRTC}" == "PQ" ]; then
-        [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
-        paramsmunge "variance-boost-curve=3" after
-    fi
-    if [ ${PSYAUCE:-0} -eq 1 ]; then
-        [ $DEBUG ] && echo "Applying the PSYAUCE"
-        # SVT-AV1-HDR has a third tune option inherited from the PSY fork. They say it's
-        # An opinionated tune optimized for film grain retention and temporal consistency. The recommended CRF range to use tune 3 is 20 to 40.
-        [ $DEBUG ] && echo "Enabling tune 3."
-        SVT_TUNE=3
-        if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-            paramsmunge "noise-norm-strength=3" after
-            paramsmunge "hbd-mds=1" after
-            paramsmunge "spy-rd=1" after
-            paramsmunge "complex-hvs=1" after
-            [ "${SVT_PRESET}" -le 6 ] && paramsmunge "ac-bias=2.0" after
-        fi
-    fi
-fi
+        if [ ${PSYAUCE:-0} -eq 1 ]; then
+            [ $DEBUG ] && echo "Applying the PSYAUCE"
+            # SVT-AV1-HDR has a third tune option inherited from the PSY fork. They say it's
+            # An opinionated tune optimized for film grain retention and temporal consistency. The recommended CRF range to use tune 3 is 20 to 40.
+            [ $DEBUG ] && echo "Enabling tune 3."
+            SVT_TUNE=3
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                paramsmunge "noise-norm-strength=3" after
+                paramsmunge "hbd-mds=1" after
+                paramsmunge "spy-rd=1" after
+                paramsmunge "complex-hvs=1" after
+                [ "${SVT_PRESET}" -le 6 ] && paramsmunge "ac-bias=2.0" after
+            fi
+        fi;;
+    "Essential")
+        [ $DEBUG ] && echo "SVT-AV1-Essential detected.";;
+    "mainline")
+        [ $DEBUG ] && echo "SVT-AV1 mainline detected.";;
+    *)
+        fail "Unknown fork of SVT-AV1, exiting.";;
+esac
 
 [ -z "$SVT_TUNE" ] && SVT_TUNE=2
 
