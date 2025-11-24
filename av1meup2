@@ -181,6 +181,7 @@ case "${SVTAV1_VERSION_STR}" in
     *"PSYEX"*) SVTAV1_FORK="PSYEX"; AV1_DOVI_SUPPORT=1;;
     *"PSY"*) SVTAV1_FORK="PSY"; AV1_DOVI_SUPPORT=1;;
     *"HDR"*) SVTAV1_FORK="HDR"; AV1_DOVI_SUPPORT=1;;
+    *"Essential"*) SVTAV1_FORK="Essential"; AV1_DOVI_SUPPORT=0;;
     *) SVTAV1_FORK="mainline"; AV1_DOVI_SUPPORT=0;;
 esac
 SVTAV1_VERSION=$(echo "${SVTAV1_VERSION_STR}" | head -n1 | awk '{print $2}' | sed 's/^v//g')
@@ -695,7 +696,7 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     unset DENOISE
 
     # all the forks support this, ostensibly it's defaulted to 1 but I'm not sure so here we are
-    [ "${SVTAV1_FORK}" != "mainline" ] && paramsmunge "adaptive-film-grain=1" after
+    [[ "PSY HDR" =~ "${SVTAV1_FORK}" ]] && paramsmunge "adaptive-film-grain=1" after
 
     # the nerds say preset 7+ is bad for the film grain juju
     if [ ${SVT_PRESET} -gt 6 ]; then
