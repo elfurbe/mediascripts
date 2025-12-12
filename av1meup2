@@ -589,43 +589,45 @@ else
     AUDIO_FLAGS="-c:a copy"
 fi
 
-## SET GOP SIZE
-## ~10x frame rate, not more than 300, 240 is probably fine for everything?
-G=240
-
 if [ -n "${FAST_DECODE}" ] && [ "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
     # There are technically two fast-decode modes, 1 and 2. 2 is newer, more meaningful decode improvement, MAYBE more visual tradeoffs.
     # I tested them both and 2 makes a much bigger difference at decode time but seems to have no meaningful downside I could measure
     paramsmunge "fast-decode=2" after
     # fast-decode recommends tune 1 so we're forcing tune 1
-    SVT_TUNE=1
+    paramsmunge "tune=1" after
 elif [ -n "${FAST_DECODE}" ] && [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; then
     echo "fast-decode value is not recognized: ${FAST_DECODE}"
     exit 1
 fi
 
-if [ -z "$SVT_PRESET" ]; then
-    if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-        SVT_PRESET=6
-    else
-        SVT_PRESET=7
-    fi
-fi
+## GOP SIZE fucking christ, so. Bigger is better for compression, but no higher than 300 because hardware decoders are fuckers, but if you set it too low the file size will balloon unnecessarily. Should also be a multiple of the mini-gop size (32) + 1, e.g. 225 = (32 * 7) + 1. 257 = (32 * 8) + 1. I've used 240 for years but that's before I knew all this, so now it's gonna be 257.
+
+DEFAULT_GOP="257"
 
 case "${SVTAV1_FORK}" in
     "PSY")
         [ $DEBUG ] && echo "SVT-AV1-PSY detected."
+        if [ -z "$SVT_PRESET" ]; then
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                paramsmunge "preset=6" after
+            else
+                paramsmunge "preset=7" after
+            fi
+        fi
+        paramsmunge "keyint=${DEFAULT_GOP}" after
+        [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
+        paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Applying the PSYAUCE"
             # SVT-AV1-PSY has a third tune option aimed at subjective visual quality at the expense of metrics performance
             # It's experimental but they consider it better so we'll use it if you're using the PSY branch
             [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-            SVT_TUNE=3
+            paramsmunge "tune=3" after
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
                 # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
-                [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+                paramsmunge "noise-norm-strength=3" after
                 [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
                 paramsmunge "hbd-mds=1" after
                 paramsmunge "spy-rd=1" after
@@ -633,17 +635,27 @@ case "${SVTAV1_FORK}" in
         fi;;
     "PSYEX")
         [ $DEBUG ] && echo "SVT-AV1-PSYEX detected."
+        if [ -z "$SVT_PRESET" ]; then
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                paramsmunge "preset=6" after
+            else
+                paramsmunge "preset=7" after
+            fi
+        fi
+        paramsmunge "keyint=${DEFAULT_GOP}" after
+        [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
+        paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Applying the PSYAUCE"
             # SVT-AV1-PSYEX has a third tune option aimed at subjective visual quality at the expense of metrics performance
             # It's experimental but they consider it better so we'll use it if you're using the PSY branch
             [ $DEBUG ] && echo "SVT-AV1-PSY detected. Using Subjective SSIM tune."
-            SVT_TUNE=3
+            paramsmunge "tune=3" after
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
                 # https://github.com/psy-ex/svt-av1-psy/releases/tag/v3.0.2
-                [ "${SVT_TUNE}" -eq 3 ] && paramsmunge "noise-norm-strength=3" after
+                paramsmunge "noise-norm-strength=3" after
                 [ "${SVT_PRESET}" -le 6 ] && paramsmunge "psy-rd=0.6" after
                 paramsmunge "hbd-mds=1" after
                 paramsmunge "spy-rd=1" after
@@ -651,8 +663,19 @@ case "${SVTAV1_FORK}" in
         fi;;
     "HDR")
         [ $DEBUG ] && echo "SVT-AV1-HDR detected."
+        if [ -z "$SVT_PRESET" ]; then
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                paramsmunge "preset=6" after
+            else
+                paramsmunge "preset=7" after
+            fi
+        fi
+        paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
+        paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
+        unset SVT_TUNE
+        paramsmunge "tune=0" after
 
         if [ "${HDRTC}" == "PQ" ]; then
             [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
@@ -660,10 +683,6 @@ case "${SVTAV1_FORK}" in
         fi
         if [ ${PSYAUCE:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Applying the PSYAUCE"
-            # SVT-AV1-HDR has a third tune option inherited from the PSY fork. They say it's
-            # An opinionated tune optimized for film grain retention and temporal consistency. The recommended CRF range to use tune 3 is 20 to 40.
-            [ $DEBUG ] && echo "Enabling tune 3."
-            SVT_TUNE=3
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
                 paramsmunge "noise-norm-strength=3" after
                 paramsmunge "hbd-mds=1" after
@@ -673,14 +692,31 @@ case "${SVTAV1_FORK}" in
             fi
         fi;;
     "Essential")
-        [ $DEBUG ] && echo "SVT-AV1-Essential detected.";;
+        [ $DEBUG ] && echo "SVT-AV1-Essential detected."
+        unset SVT_TUNE
+        #paramsmunge "keyint=-1" after
+        ;;
     "mainline")
-        [ $DEBUG ] && echo "SVT-AV1 mainline detected.";;
+        [ $DEBUG ] && echo "SVT-AV1 mainline detected."
+        paramsmunge "keyint=${DEFAULT_GOP}" after
+        ## this auto-gop nonsense made my files un-seekable, so fuck it to hell where it can die
+        #paramsmunge "keyint=-1" after
+        ## scd does nothing in mainline
+        #paramsmunge "scd=1" after
+        paramsmunge "enable-overlays=1" after
+        if [ -z "$SVT_PRESET" ]; then
+            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
+                paramsmunge "preset=6" after
+            else
+                paramsmunge "preset=7" after
+            fi
+        fi
+        paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
+        paramsmunge "input-depth=10" after
+        [ -z "$SVT_TUNE" ] && paramsmunge "tune=2" after;;
     *)
         fail "Unknown fork of SVT-AV1, exiting.";;
 esac
-
-[ -z "$SVT_TUNE" ] && SVT_TUNE=2
 
 if [ -n "${DENOISE}" ]; then
     VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
@@ -707,9 +743,6 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
         SVT_PRESET=6
     fi
 fi
-
-#paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=0:irefresh-type=2:keyint=${G}"
-paramsmunge "tune=${SVT_TUNE}:enable-variance-boost=1:enable-qm=1:qm-min=4" after
 
 if [ $COPY_HDR ]; then
     ## REFERENCES
@@ -779,7 +812,7 @@ if [ ! -z "$EXTRA_PARAMS" ]; then
     paramsmunge "${EXTRA_PARAMS}" after
 fi
 
-VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -preset ${SVT_PRESET} -g ${G} -crf ${CRF} -svtav1-params ${PARAMS}"
+VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -crf ${CRF} -svtav1-params ${PARAMS}"
 [ ${DOVI:-0} -eq 1 ] && VIDEO="$VIDEO -dolbyvision true"
 
 MAPS="-map 0 -map -0:d"
@@ -878,7 +911,7 @@ if [ $DEBUG ]; then
         echo "nice -n 5 $FFMPEG -i \"$INPUT\" $ENCODE_FLAGS \"$OUTPUT\""
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
-        SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+        SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
         [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
@@ -919,7 +952,7 @@ if [ ${NOPIPE:-0} -eq 1 ]; then
     { set +x; } 2>/dev/null
 else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
-    SWITCHES="--crf ${CRF} --preset ${SVT_PRESET} --irefresh-type 2 -i stdin --input-depth 10 --keyint ${G} ${SWITCHES}"
+    SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
     [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
