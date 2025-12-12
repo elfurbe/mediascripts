@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+
+import sys
+import subprocess
+import argparse
+import os
+from shlex import split as shsplit
+from shlex import quote as shquote
+import json
+
+def parseargs():
+    parser = argparse.ArgumentParser(description="Add Dolby Vision to an input mkv video file that has existing HDR10+ metadata")
+    parser.add_argument('-i', '--input', type=str, help="input mkv filename", required=True)
+    parser.add_argument('-o', '--output', type=str, default="outfile.mkv", help="output mkv filename")
+    return parser.parse_args()
+
+def bash(command):
+    cmd = shsplit(command)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    o, e = proc.communicate()
+    return o.decode('utf-8').strip()
+
+def ffprobe(file):
+    ffprobe = bash('which ffprobe')
+    ffp_cmd = ffprobe + ' -analyzeduration 100 -probesize 100M -hide_banner -loglevel panic -select_streams v -print_format json -show_format -show_packets -show_streams -count_frames -show_frames -read_intervals "%+#1" ' + input_file_name
+    ffp = bash(ffp_cmd)
+    j_ffp = json.loads(ffp)
+    return j_ffp
+
+def mediainfo(file):
+    mediainfo = bash('which mediainfo')
+    mi_cmd = mediainfo + ' --output=JSON ' + input_file_name
+    mi = bash(mi_cmd)
+    j_mi = json.loads(mi)
+    return j_mi
+
+def framecount(metadata):
+    metadata['framecount'] = int(mi['media']['track'][1]['FrameCount'])
+
+def hdrtection(metadata):
+    video = mi['media']['track'][1]
+    metadata['hdrformat'] = str(video['HDR_Format'])
+    metadata['hdrformatcompat'] = str(video['HDR_Format_Compatibility'])
+
+    if "Dolby" in metadata['hdrformat']:
+        print("Dolby Vision data already detected")
+        sys.exit()
+        mi_hdrformatprofile = str(video['HDR_Format_Profile'])
+        mi_hdrformatlevel = str(video['HDR_Format_Level'])
+        stream_side_data = ff['streams'][0]['side_data_list'][0]
+        metadata['dv_profile'] = stream_side_data['dv_profile']
+        metadata['dv_level'] = stream_side_data['dv_level']
+        metadata['rpu_present'] = stream_side_data['rpu_present_flag']
+        metadata['el_present_flag'] = stream_side_data['el_present_flag']
+        metadata['bl_present_flag'] = stream_side_data['bl_present_flag']
+
+    frame = ff['packets_and_frames'][1]
+    metadata['color_space'] = frame['color_space']
+    metadata['color_primaries'] = frame['color_primaries']
+    metadata['color_transfer'] = frame['color_transfer']
+
+    mastering_display = frame['side_data_list'][0]
+    metadata['red_x'] = mastering_display['red_x']
+    metadata['red_y'] = mastering_display['red_y']
+    metadata['green_x'] = mastering_display['green_x']
+    metadata['green_y'] = mastering_display['green_y']
+    metadata['blue_x'] = mastering_display['blue_x']
+    metadata['blue_y'] = mastering_display['blue_y']
+    metadata['white_point_x'] = mastering_display['white_point_x']
+    metadata['white_point_y'] = mastering_display['white_point_y']
+    metadata['min_lum'] = eval(mastering_display['min_luminance'])
+    metadata['max_lum'] = eval(mastering_display['max_luminance'])
+
+    cll = frame['side_data_list'][1]
+    metadata['max_cll'] = cll['max_content']
+    metadata['max_fall'] = cll['max_average']
+
+if __name__ == '__main__':
+    args = parseargs()
+
+    input_file_name = args.input
+    elemstream = input_file_name.replace('.mkv','.hevc')
+    hdr10plus_json = input_file_name.replace('.mkv','.hdr10p.json')
+    dv_config = input_file_name.replace('.mkv','.dv.json')
+    dv_rpu = input_file_name.replace('.mkv','.RPU_8.bin')
+    with_rpu = input_file_name.replace('.mkv','.dv.hevc')
+    output_file_name = args.output
+
+    mi = mediainfo(input_file_name)
+    ff = ffprobe(input_file_name)
+    meta = {}
+    framecount(meta)
+    hdrtection(meta)
+
+    temp_dict = {}
+    temp_dict['length'] = meta['framecount']
+    temp_dict['level6'] = { 'max_display_mastering_luminance': int(meta['max_lum']), 'min_display_mastering_luminance': int(meta['min_lum']), 'max_content_light_level': int(meta['max_cll']), 'max_frame_average_light_level': int(meta['max_fall'])}
+
+    with open(dv_config, "w") as outfile:
+        print("Writing Dolby Vision config file")
+        json.dump(temp_dict, outfile)
+
+    mkvextract = bash('which mkvextract')
+    dovi_tool = bash('which dovi_tool')
+    hdr10plus_tool = bash('which hdr10plus_tool')
+    mkvmerge = bash('which mkvmerge')
+
+    print("Extracting hevc elementary stream")
+    mkvextract_cmd = mkvextract + ' ' + args.input + ' tracks 0:' + elemstream
+    bash(mkvextract_cmd)
+    
+    print("Extracting HDR10+ json")
+    hdr10pjson_cmd = hdr10plus_tool + ' extract -i ' + elemstream + ' -o ' + hdr10plus_json
+    bash(hdr10pjson_cmd)
+    
+    print("Generating Dolby Vision RPU")
+    dovitool_cmd = dovi_tool + ' -m 2 generate --json ' + dv_config + ' --rpu-out ' + dv_rpu + ' --hdr10plus-json ' + hdr10plus_json
+    bash(dovitool_cmd)
+
+    print("Adding RPU data to elementary stream")
+    dovitool_cmd = dovi_tool + ' inject-rpu -i ' + elemstream + ' -r ' + dv_rpu + ' -o ' + with_rpu
+    bash(dovitool_cmd)
+
+    print("Merging new video data with original file non-video tracks")
+    mkvmerge_final_cmd = mkvmerge + ' -o ' + output_file_name + ' ' + with_rpu + ' --no-video ' + input_file_name
+    bash(mkvmerge_final_cmd)
+
+    print("Cleaning up intermediate files")
+    os.remove(elemstream)
+    os.remove(hdr10plus_json)
+    os.remove(dv_config)
+    os.remove(dv_rpu)
+    os.remove(with_rpu)
