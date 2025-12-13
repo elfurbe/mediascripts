@@ -613,6 +613,8 @@ case "${SVTAV1_FORK}" in
             else
                 paramsmunge "preset=7" after
             fi
+        else
+            paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
@@ -671,6 +673,8 @@ case "${SVTAV1_FORK}" in
             else
                 paramsmunge "preset=7" after
             fi
+        else
+            paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
@@ -712,6 +716,8 @@ case "${SVTAV1_FORK}" in
             else
                 paramsmunge "preset=7" after
             fi
+        else
+            paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
         paramsmunge "input-depth=10" after
