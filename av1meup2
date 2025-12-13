@@ -641,6 +641,8 @@ case "${SVTAV1_FORK}" in
             else
                 paramsmunge "preset=7" after
             fi
+        else
+            paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
