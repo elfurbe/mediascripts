@@ -620,6 +620,8 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
+        paramsmunge "enable-overlays=1" after
+        paramsmunge "progress=3" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Applying the PSYAUCE"
@@ -650,6 +652,8 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
+        paramsmunge "enable-overlays=1" after
+        paramsmunge "progress=3" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Applying the PSYAUCE"
@@ -682,6 +686,8 @@ case "${SVTAV1_FORK}" in
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
         unset SVT_TUNE
         paramsmunge "tune=0" after
+        paramsmunge "enable-overlays=1" after
+        paramsmunge "progress=3" after
 
         if [ "${HDRTC}" == "PQ" ]; then
             [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
@@ -701,6 +707,8 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
         unset SVT_TUNE
         #paramsmunge "keyint=-1" after
+        paramsmunge "enable-overlays=1" after
+        paramsmunge "progress=3" after
         ;;
     "mainline")
         [ $DEBUG ] && echo "SVT-AV1 mainline detected."
@@ -710,6 +718,7 @@ case "${SVTAV1_FORK}" in
         ## scd does nothing in mainline
         #paramsmunge "scd=1" after
         paramsmunge "enable-overlays=1" after
+        paramsmunge "progress=2" after
         if [ -z "$SVT_PRESET" ]; then
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
                 paramsmunge "preset=6" after
@@ -920,7 +929,6 @@ if [ $DEBUG ]; then
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
-        [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
         echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
             echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
