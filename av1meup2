@@ -969,7 +969,6 @@ if [ ${NOPIPE:-0} -eq 1 ]; then
 else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
-    [ "${SVTAV1_FORK}" != "mainline" ] && SWITCHES="${SWITCHES} --progress 3" || SWITCHES="${SWITCHES} --progress 2"
     set -x
     nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
     { set +x; } 2>/dev/null
