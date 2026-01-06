@@ -336,6 +336,9 @@ if [ "${FPS_NUM+set}" != set ] || [ "${FPS_DEN+set}" != set ]; then
                 48)
                     FPS_NUM="48"
                     FPS_DEN="1";;
+                50)
+                    FPS_NUM="50"
+                    FPS_DEN="1";;
                 59)
                     FPS_NUM="60000"
                     FPS_DEN="1001";;
