@@ -10,7 +10,7 @@ Usage: ${0##*/} -i <INPUT FILE>
 -k|--keep:          keep artifacts
 -v|--verify:        verify stream with Dolby Vision toolkit, default disabled
 -a|--audio:         transcode source audio to specified codec (opus, aac, flac)
---denoise:          pass denoise flag to encode script(s)
+--denoise:          pass denoise flag to encode script(s) [av1, hevc, all (default)]
 --x265crf:          set an alternate x265 crf (default: 16)
 --x265preset:       set an alternate x265 preset (default: medium)
 --x265tune:         set an alternate x265 tune (default: none)
@@ -420,7 +420,7 @@ if [ ${AV1} -eq 1 ]; then
     [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
     [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
     [ ${CROP} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
-    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "svt" ]; then
+    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "av1" ] || [ "${DENOISE}" == "svt" ]; then
         OPTIONS="${OPTIONS} --denoise"
     fi
     set -x
@@ -445,7 +445,7 @@ if [ ${HEVC} -eq 1 ]; then
     fi
     [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
     [ ${CROP} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
-    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "x265" ]; then
+    if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "x265" ] || [ "${DENOISE}" == "hevc" ]; then
         OPTIONS="${OPTIONS} --denoise"
     fi
     set -x
