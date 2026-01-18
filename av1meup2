@@ -603,6 +603,28 @@ elif [ -n "${FAST_DECODE}" ] && [ ! "${FAST_DECODE}" -eq "${FAST_DECODE}" ]; the
     exit 1
 fi
 
+if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
+    # technically you can do film grain without denoise but I cannot find a definite answer on whether there's any point in doing so
+    # if it doesn't denoise the input frames, you're not getting any of the bitrate value of doing this, but you're still paying
+    # the compute-time penalty to analyze the frame for grain characteristics, so I don't know why you'd do one without the other
+    # ergo if you ask for film-grain you're getting film-grain-denoise also. If you _KNOW_ why you would want to do
+    # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
+    paramsmunge "film-grain=${FILM_GRAIN}" after
+    paramsmunge "film-grain-denoise=1" after
+
+    # we don't want to use the native denoiser if we're doing this
+    unset DENOISE
+
+    # all the forks support this, ostensibly it's defaulted to 1 but I'm not sure so here we are
+    [[ "PSY HDR" =~ "${SVTAV1_FORK}" ]] && paramsmunge "adaptive-film-grain=1" after
+
+    # the nerds say preset 7+ is bad for the film grain juju
+    if [ -n "${SVT_PRESET}" ] && [ ${SVT_PRESET} -gt 6 ]; then
+        echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
+        SVT_PRESET=6
+    fi
+fi
+
 ## GOP SIZE fucking christ, so. Bigger is better for compression, but no higher than 300 because hardware decoders are fuckers, but if you set it too low the file size will balloon unnecessarily. Should also be a multiple of the mini-gop size (32) + 1, e.g. 225 = (32 * 7) + 1. 257 = (32 * 8) + 1. I've used 240 for years but that's before I knew all this. I tried 257 but I had some seeking issues, so I'm changing to 225, no problems so far.
 
 DEFAULT_GOP="225"
@@ -722,7 +744,7 @@ case "${SVTAV1_FORK}" in
         #paramsmunge "scd=1" after
         paramsmunge "enable-overlays=1" after
         paramsmunge "progress=2" after
-        if [ -z "$SVT_PRESET" ]; then
+        if [ -z "${SVT_PRESET}" ]; then
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
                 paramsmunge "preset=6" after
             else
@@ -740,28 +762,6 @@ esac
 
 if [ -n "${DENOISE}" ]; then
     VF="${VF:+${VF},}hqdn3d=luma_spatial=4.00:chroma_spatial=3.00:luma_tmp=6.00:chroma_tmp=4.5"
-fi
-
-if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
-    # technically you can do film grain without denoise but I cannot find a definite answer on whether there's any point in doing so
-    # if it doesn't denoise the input frames, you're not getting any of the bitrate value of doing this, but you're still paying
-    # the compute-time penalty to analyze the frame for grain characteristics, so I don't know why you'd do one without the other
-    # ergo if you ask for film-grain you're getting film-grain-denoise also. If you _KNOW_ why you would want to do
-    # film-grain *without* film-grain-denoise you should file an issue and explain it to babby and maybe I'll implement the option
-    paramsmunge "film-grain=${FILM_GRAIN}" after
-    paramsmunge "film-grain-denoise=1" after
-
-    # we don't want to use the native denoiser if we're doing this
-    unset DENOISE
-
-    # all the forks support this, ostensibly it's defaulted to 1 but I'm not sure so here we are
-    [[ "PSY HDR" =~ "${SVTAV1_FORK}" ]] && paramsmunge "adaptive-film-grain=1" after
-
-    # the nerds say preset 7+ is bad for the film grain juju
-    if [ ${SVT_PRESET} -gt 6 ]; then
-        echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
-        SVT_PRESET=6
-    fi
 fi
 
 if [ $COPY_HDR ]; then
