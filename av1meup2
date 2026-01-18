@@ -625,6 +625,9 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     fi
 fi
 
+## common params
+paramsmunge "enable-overlays=1" after
+
 ## GOP SIZE fucking christ, so. Bigger is better for compression, but no higher than 300 because hardware decoders are fuckers, but if you set it too low the file size will balloon unnecessarily. Should also be a multiple of the mini-gop size (32) + 1, e.g. 225 = (32 * 7) + 1. 257 = (32 * 8) + 1. I've used 240 for years but that's before I knew all this. I tried 257 but I had some seeking issues, so I'm changing to 225, no problems so far.
 
 DEFAULT_GOP="225"
@@ -645,7 +648,6 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
-        paramsmunge "enable-overlays=1" after
         paramsmunge "progress=3" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
@@ -677,7 +679,6 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
-        paramsmunge "enable-overlays=1" after
         paramsmunge "progress=3" after
 
         if [ ${PSYAUCE:-0} -eq 1 ]; then
@@ -711,7 +712,6 @@ case "${SVTAV1_FORK}" in
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
         unset SVT_TUNE
         paramsmunge "tune=0" after
-        paramsmunge "enable-overlays=1" after
         paramsmunge "progress=3" after
 
         if [ "${HDRTC}" == "PQ" ]; then
@@ -732,7 +732,6 @@ case "${SVTAV1_FORK}" in
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
         unset SVT_TUNE
         #paramsmunge "keyint=-1" after
-        paramsmunge "enable-overlays=1" after
         paramsmunge "progress=3" after
         ;;
     "mainline")
@@ -742,7 +741,6 @@ case "${SVTAV1_FORK}" in
         #paramsmunge "keyint=-1" after
         ## scd does nothing in mainline
         #paramsmunge "scd=1" after
-        paramsmunge "enable-overlays=1" after
         paramsmunge "progress=2" after
         if [ -z "${SVT_PRESET}" ]; then
             if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
