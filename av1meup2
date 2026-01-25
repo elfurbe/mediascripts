@@ -711,7 +711,7 @@ case "${SVTAV1_FORK}" in
         paramsmunge "hbd-mds=1" after
         
         if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
-            paramsmunge "tune=4" after
+            paramsmunge "tune=3" after
             paramsmunge "noise-norm-strength=3" after
         fi
 
