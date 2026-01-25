@@ -35,6 +35,33 @@ def mediainfo(file):
     j_mi = json.loads(mi)
     return j_mi
 
+def framerate(metadata):
+    ff_framerate = str(ff['streams'][0]['r_frame_rate'])
+    ff_framerate_num = int(ff_framerate.split("/")[0])
+    ff_framerate_den = int(ff_framerate.split("/")[1])
+    ff_framerate = round(eval(ff_framerate),3)
+    if 'FrameRate_Num' in mi['media']['track'][1]:
+        mi_framerate_num = int(mi['media']['track'][1]['FrameRate_Num'])
+        mi_framerate_den = int(mi['media']['track'][1]['FrameRate_Den'])
+        mi_framerate = round(mi_framerate_num / mi_framerate_den,3)
+    else:
+        mi_framerate = float(mi['media']['track'][1]['FrameRate'])
+        match mi_framerate:
+            case "24":
+                mi_framerate_num = 24
+                mi_framerate_den = 1
+            case "23.976":
+                mi_framerate_num = 24000
+                mi_framerate_den = 1001
+
+    if ff_framerate == mi_framerate:
+        metadata['framerate'] = ff_framerate
+        metadata['framerate_num'] = ff_framerate_num
+        metadata['framerate_den'] = ff_framerate_den
+    else:
+        print('framerate ' + str(ff_framerate) + ' and ' + str(mi_framerate) + ' do not match')
+        sys.exit(1)
+
 def framecount(metadata):
     metadata['framecount'] = int(mi['media']['track'][1]['FrameCount'])
 
@@ -92,6 +119,7 @@ if __name__ == '__main__':
     meta = {}
     framecount(meta)
     hdrtection(meta)
+    framerate(meta)
 
     temp_dict = {}
     temp_dict['length'] = meta['framecount']
@@ -123,7 +151,7 @@ if __name__ == '__main__':
     bash(dovitool_cmd)
 
     print("Merging new video data with original file non-video tracks")
-    mkvmerge_final_cmd = mkvmerge + ' -o ' + output_file_name + ' ' + with_rpu + ' --no-video ' + input_file_name
+    mkvmerge_final_cmd = mkvmerge + ' -o ' + output_file_name + ' --default-duration 0:' + str(meta['framerate_num']) + '/' + str(meta['framerate_den']) + 'fps ' + with_rpu + ' --no-video ' + input_file_name
     bash(mkvmerge_final_cmd)
 
     print("Cleaning up intermediate files")
