@@ -54,31 +54,31 @@ while [ $# -gt 0 ]; do
     --denoise)
         if [ -n "$2" ] && [ "$2" == "$2" ] 2>/dev/null; then shift; DENOISE=$1; else DENOISE=all; fi
         shift;;
-    --x265crf)
+    --x265crf|--x265-crf)
         shift
         X265CRF="${1}"
         shift;;
-    --x265preset)
+    --x265preset|--x265-preset)
         shift
         X265PRESET="${1}"
         shift;;
-    --x265tune)
+    --x265tune|--x265-tune)
         shift
         X265TUNE="${1}"
         shift;;
-    --svtcrf)
+    --svtcrf|--svt-crf)
         shift
         SVTCRF="${1}"
         shift;;
-    --svtpreset)
+    --svtpreset|--svt-preset)
         shift
         SVTPRESET="${1}"
         shift;;
-    --svttune)
+    --svttune|--svt-tune)
         shift
         SVTTUNE="${1}"
         shift;;
-    --svtfilmgrain)
+    --svtfilmgrain|--svt-film-grain)
         if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; SVTFILMGRAIN=$1; else SVTFILMGRAIN=8; fi
         SVTPRESET=6
         SVTTUNE=2
