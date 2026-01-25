@@ -626,7 +626,7 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
 fi
 
 ## common params
-paramsmunge "enable-overlays=1" after
+#paramsmunge "enable-overlays=1" after
 
 ## GOP SIZE fucking christ, so. Bigger is better for compression, but no higher than 300 because hardware decoders are fuckers, but if you set it too low the file size will balloon unnecessarily. Should also be a multiple of the mini-gop size (32) + 1, e.g. 225 = (32 * 7) + 1. 257 = (32 * 8) + 1. I've used 240 for years but that's before I knew all this. I tried 257 but I had some seeking issues, so I'm changing to 225, no problems so far.
 
