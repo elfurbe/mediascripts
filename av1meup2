@@ -615,9 +615,6 @@ if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
     # we don't want to use the native denoiser if we're doing this
     unset DENOISE
 
-    # all the forks support this, ostensibly it's defaulted to 1 but I'm not sure so here we are
-    [[ "PSY HDR" =~ "${SVTAV1_FORK}" ]] && paramsmunge "adaptive-film-grain=1" after
-
     # the nerds say preset 7+ is bad for the film grain juju
     if [ -n "${SVT_PRESET}" ] && [ ${SVT_PRESET} -gt 6 ]; then
         echo "Using film-grain synthesis at presets numerically higher than 6 is not recommended, setting preset 6"
@@ -709,25 +706,20 @@ case "${SVTAV1_FORK}" in
         paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
-        paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
         unset SVT_TUNE
-        paramsmunge "tune=0" after
         paramsmunge "progress=3" after
+        paramsmunge "hbd-mds=1" after
+        
+        if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
+            paramsmunge "tune=4" after
+            paramsmunge "noise-norm-strength=3" after
+        fi
 
         if [ "${HDRTC}" == "PQ" ]; then
             [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
             paramsmunge "variance-boost-curve=3" after
         fi
-        if [ ${PSYAUCE:-0} -eq 1 ]; then
-            [ $DEBUG ] && echo "Applying the PSYAUCE"
-            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-                paramsmunge "noise-norm-strength=3" after
-                paramsmunge "hbd-mds=1" after
-                paramsmunge "spy-rd=1" after
-                paramsmunge "complex-hvs=1" after
-                [ "${SVT_PRESET}" -le 6 ] && paramsmunge "ac-bias=2.0" after
-            fi
-        fi;;
+        ;;
     "Essential")
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
         unset SVT_TUNE
