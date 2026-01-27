@@ -80,8 +80,6 @@ while [ $# -gt 0 ]; do
         shift;;
     --svtfilmgrain|--svt-film-grain)
         if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; SVTFILMGRAIN=$1; else SVTFILMGRAIN=8; fi
-        SVTPRESET=6
-        SVTTUNE=2
         shift;;
     -a|--audio)
         shift
