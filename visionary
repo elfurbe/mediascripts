@@ -434,7 +434,7 @@ fi
 
 if [ ${HEVC} -eq 1 ]; then
     echo ">> Starting X265 encode..."
-    OPTIONS="--input ${BL} --output ${BLX265} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $PRESET} ${X265TUNE:+--tune $TUNE}"
+    OPTIONS="--input ${BL} --output ${BLX265} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $X265PRESET} ${X265TUNE:+--tune $X265TUNE}"
     if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ] && [ "${FPS_NUM}" != "null" ] && [ "${FPS_DEN}" != "null" ]; then
         OPTIONS="${OPTIONS} --fps ${FPS_NUM}/${FPS_DEN}"
     elif [ "${FPS}" != "" ]; then
