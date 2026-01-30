@@ -706,8 +706,11 @@ case "${SVTAV1_FORK}" in
         paramsmunge "keyint=${DEFAULT_GOP}" after
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
-        paramsmunge "progress=3" after
         paramsmunge "hbd-mds=1" after
+        case $SVTAV1_MAJOR in
+            3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "progress=2" after || paramsmunge "progress=3" after;;
+            4) paramsmunge "progress=2" after
+        esac
         
         if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
             [ -z "${SVT_TUNE}" ] && paramsmunge "tune=3" after
