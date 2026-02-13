@@ -830,7 +830,7 @@ if [ ! -z "$EXTRA_PARAMS" ]; then
 fi
 
 VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -crf ${CRF} -svtav1-params ${PARAMS}"
-[ ${DOVI:-0} -eq 1 ] && VIDEO="$VIDEO -dolbyvision true"
+[ ${DOVI:-0} -eq 1 ] && VIDEO="$VIDEO -dolbyvision 1"
 
 MAPS="-map 0 -map -0:d"
 TRAILERS="-c:s copy -max_muxing_queue_size 9999"
