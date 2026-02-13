@@ -716,7 +716,7 @@ case "${SVTAV1_FORK}" in
             if [ -z "${SVT_TUNE}" ]; then
                 case $SVTAV1_MAJOR in
                     3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "tune=4" after || paramsmunge "tune=3" after;;
-                    4) paramsmunge "tune=4" after
+                    4) paramsmunge "tune=5" after
                 esac
             fi
             paramsmunge "noise-norm-strength=3" after
