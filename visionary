@@ -488,7 +488,7 @@ if [[ "${AUDIO}" =~ (opus|aac|flac) ]]; then
     echo ">> Transcoding source audio to ${AUDIO}..."
     OTHERTRACKS="${OUTPUT}_${AUDIO}.mkv"
     set -x
-    ${AUDIOVISE} -i ${INPUT} -o ${OTHERTRACKS} --${AUDIO} --novideo
+    ${AUDIOVISE} -i "${INPUT}" -o ${OTHERTRACKS} --${AUDIO} --novideo
     { set +x; } 2>/dev/null
     echo
 elif [ -n "${AUDIO}" ] ; then
