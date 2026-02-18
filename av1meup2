@@ -40,6 +40,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --hdr10pfile:   HDR10+ json file (cannot use with nopipe)
 --fps:          For elementary streams without framerate, use this to provide it
 --denoise:      Denoise source with ffmpeg hqdn3d (big bitrate win, detail go bye bye)
+--ml-defaults:  if not using mainline, force mainline defaults anyway
 
 EOF
 }
@@ -152,6 +153,9 @@ while [ $# -gt 0 ]; do
             shift;;
     --denoise)
             DENOISE=1
+            shift;;
+    --ml-defaults)
+            ML_DEFAULTS=1
             shift;;
     -h|--help)
             usage
@@ -704,9 +708,23 @@ case "${SVTAV1_FORK}" in
             paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
-        [ $DEBUG ] && echo "Enabling deblocking loop filter."
-        paramsmunge "enable-dlf=2" after
-        paramsmunge "hbd-mds=1" after
+        if [ ${ML_DEFAULTS:-0} -eq 1 ]; then
+            [ $DEBUG ] && echo "Forcing mainline defaults"
+            paramsmunge "noise-norm-strength=0"
+            paramsmunge "qp-scale-compress-strength=0"
+            paramsmunge "ac-bias=0"
+            paramsmunge "enable-tf=0"
+            paramsmunge "sharpness=0"
+            paramsmunge "enable-variance-boost=0"
+        else
+            [ $DEBUG ] && echo "Enabling deblocking loop filter."
+            paramsmunge "enable-dlf=2" after
+            paramsmunge "hbd-mds=1" after
+            if [ "${HDRTC}" == "PQ" ]; then
+                [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
+                paramsmunge "variance-boost-curve=3" after
+            fi
+        fi
         case $SVTAV1_MAJOR in
             3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "progress=2" after || paramsmunge "progress=3" after;;
             4) paramsmunge "progress=2" after
@@ -722,10 +740,6 @@ case "${SVTAV1_FORK}" in
             paramsmunge "noise-norm-strength=3" after
         fi
 
-        if [ "${HDRTC}" == "PQ" ]; then
-            [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
-            paramsmunge "variance-boost-curve=3" after
-        fi
         ;;
     "Essential")
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
