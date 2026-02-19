@@ -14,11 +14,13 @@ Usage: ${0##*/} -i <INPUT FILE>
 --x265crf:          set an alternate x265 crf (default: 16)
 --x265preset:       set an alternate x265 preset (default: medium)
 --x265tune:         set an alternate x265 tune (default: none)
+--x265params:       a string of parameters to pass to x265
 --svtcrf:           set an alternate svt-av1 crf (default: 22)
 --svtpreset:        set an alternate svt-av1 preset (default: 7)
 --svttune:          set an alternate svt-av1 tune (default: 3)
 --svtfilmgrain:     engage svt-av1 grain analysis/reconstruction
 --svtmldefaults:    when using a fork, force mainline svt-av1 defaults
+--svtparams:        a string of parameters to pass to svt-av1
 --av1:              HIGHLY EXPERIMENTAL SUPPORT FOR AV1
 --dual:             Run both an hevc AND an av1 encode in one pass (more efficient)
 --crop:             crop input video, remove offsets from dovi RPUs (no HDR10+)
@@ -67,6 +69,10 @@ while [ $# -gt 0 ]; do
         shift
         X265TUNE="${1}"
         shift;;
+    --x265params|--x265-params)
+        shift
+        X265PARAMS="${1}"
+        shift;;
     --svtcrf|--svt-crf)
         shift
         SVTCRF="${1}"
@@ -84,6 +90,10 @@ while [ $# -gt 0 ]; do
         shift;;
     --svtmldefaults|--svt-ml-defaults)
         SVTMLDEFAULTS=1
+        shift;;
+    --svtparams|--svt-params)
+        shift
+        SVTPARAMS="${1}"
         shift;;
     -a|--audio)
         shift
@@ -240,7 +250,7 @@ if [ ${DEBUG:-0} -eq 1 ]; then
     echo
     echo "<< VARIABLE STATE:"
     echo "<< -----------------"
-    for var in INPUT FPS HDRFORMAT FORMATCOMPAT DURATION FRAME_COUNT BITRATE SIZE ISDOVI ISHDR10P HDRSUM OUTPUT HEVC AV1 KEEP VERIFY DENOISE X265CRF X265PRESET X265TUNE SVTCRF SVTPRESET SVTTUNE SVTFILMGRAIN SVTMLDEFAULTS AUDIO CROP SVTAV1_FORK SVTAV1_VERSION FIFO BL BL10P EL RPU RPU_8 HDR10P BLX265 WITH_RPU AV1_IVF REMUXED; do
+    for var in INPUT FPS HDRFORMAT FORMATCOMPAT DURATION FRAME_COUNT BITRATE SIZE ISDOVI ISHDR10P HDRSUM OUTPUT HEVC AV1 KEEP VERIFY DENOISE X265CRF X265PRESET X265TUNE X265PARAMS SVTCRF SVTPRESET SVTTUNE SVTFILMGRAIN SVTMLDEFAULTS SVTPARAMS AUDIO CROP SVTAV1_FORK SVTAV1_VERSION FIFO BL BL10P EL RPU RPU_8 HDR10P BLX265 WITH_RPU AV1_IVF REMUXED; do
         [ -n "${!var}" ] && echo "<< $var,${!var}" || echo "<< $var,<unset>"
     done | ${COLUMN} --separator , --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
@@ -428,6 +438,9 @@ if [ ${AV1} -eq 1 ]; then
     if [ ${SVTMLDEFAULTS:-0} -eq 1 ]; then
         OPTIONS="${OPTIONS} --ml-defaults"
     fi
+    if [ "${SVTPARAMS:-"nope"}" != "nope" ]; then
+        OPTIONS="${OPTIONS} --params \"${SVTPARAMS}\""
+    fi
     set -x
     ${AV1MEUP2} ${OPTIONS} || fail "<> Encode failed."
     { set +x; } 2>/dev/null
@@ -452,6 +465,9 @@ if [ ${HEVC} -eq 1 ]; then
     [ ${CROP} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
     if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "x265" ] || [ "${DENOISE}" == "hevc" ]; then
         OPTIONS="${OPTIONS} --denoise"
+    fi
+    if [ "${X265PARAMS:-"nope"}" != "nope" ]; then
+        OPTIONS="${OPTIONS} --params \"${X265PARAMS}\""
     fi
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "<> Encode failed."
