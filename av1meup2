@@ -710,12 +710,12 @@ case "${SVTAV1_FORK}" in
         paramsmunge "keyint=${DEFAULT_GOP}" after
         if [ ${ML_DEFAULTS:-0} -eq 1 ]; then
             [ $DEBUG ] && echo "Forcing mainline defaults"
-            paramsmunge "noise-norm-strength=0"
-            paramsmunge "qp-scale-compress-strength=0"
-            paramsmunge "ac-bias=0"
-            paramsmunge "enable-tf=0"
-            paramsmunge "sharpness=0"
-            paramsmunge "enable-variance-boost=0"
+            paramsmunge "noise-norm-strength=0" after
+            paramsmunge "qp-scale-compress-strength=0" after
+            paramsmunge "ac-bias=0" after
+            paramsmunge "enable-tf=0" after
+            paramsmunge "sharpness=0" after
+            paramsmunge "enable-variance-boost=0" after
         fi
         [ $DEBUG ] && echo "Enabling deblocking loop filter."
         paramsmunge "enable-dlf=2" after
