@@ -935,6 +935,9 @@ if [ -n "${HDR10PFILE}" ]; then
     paramsmunge "hdr10plus-json=${HDR10PFILE}" after
 fi
 
+# deduplicate the params variable
+PARAMS="$(echo "${PARAMS}" | awk 'BEGIN{RS=ORS=":"} !seen[$0]++' | tr '\n' ' ' | sed -e 's/:$//g')"
+
 if [ $DEBUG ]; then
     echo "COMMANDS:"
     [[ "${INPUT##*.}" == "mkv" ]] && echo "$STRIPCOVERS \"${INPUT}\""
