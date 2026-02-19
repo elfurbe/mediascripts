@@ -716,15 +716,10 @@ case "${SVTAV1_FORK}" in
             paramsmunge "enable-tf=0"
             paramsmunge "sharpness=0"
             paramsmunge "enable-variance-boost=0"
-        else
-            [ $DEBUG ] && echo "Enabling deblocking loop filter."
-            paramsmunge "enable-dlf=2" after
-            paramsmunge "hbd-mds=1" after
-            if [ "${HDRTC}" == "PQ" ]; then
-                [ $DEBUG ] && echo "Enabling PQ-specific variance boost curve."
-                paramsmunge "variance-boost-curve=3" after
-            fi
         fi
+        [ $DEBUG ] && echo "Enabling deblocking loop filter."
+        paramsmunge "enable-dlf=2" after
+        paramsmunge "hbd-mds=1" after
         case $SVTAV1_MAJOR in
             3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "progress=2" after || paramsmunge "progress=3" after;;
             4) paramsmunge "progress=2" after
@@ -763,6 +758,11 @@ case "${SVTAV1_FORK}" in
             fi
         else
             paramsmunge "preset=${SVT_PRESET}" after
+        fi
+        if [ "${SVTAV1_MAJOR}" -ge 4 ]; then
+            paramsmunge "enable-dlf=2" after
+        else
+            paramsmunge "enable-dlf=1" after
         fi
         paramsmunge "enable-variance-boost=1:enable-qm=1:qm-min=4" after
         paramsmunge "input-depth=10" after
