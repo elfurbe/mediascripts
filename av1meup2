@@ -708,23 +708,39 @@ case "${SVTAV1_FORK}" in
             paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
-        if [ ${ML_DEFAULTS:-0} -eq 1 ]; then
-            [ $DEBUG ] && echo "Forcing mainline defaults"
-            paramsmunge "noise-norm-strength=0" after
-            paramsmunge "qp-scale-compress-strength=0" after
-            paramsmunge "ac-bias=0" after
-            paramsmunge "enable-tf=0" after
-            paramsmunge "sharpness=0" after
-            paramsmunge "enable-variance-boost=0" after
-        fi
-        [ $DEBUG ] && echo "Enabling deblocking loop filter."
-        paramsmunge "enable-dlf=2" after
-        paramsmunge "hbd-mds=1" after
         case $SVTAV1_MAJOR in
             3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "progress=2" after || paramsmunge "progress=3" after;;
             4) paramsmunge "progress=2" after
         esac
-        
+
+        if [ ${ML_DEFAULTS:-0} -eq 1 ]; then
+            [ $DEBUG ] && echo "Forcing mainline defaults"
+            paramsmunge "enable-qm=0" after
+            paramsmunge "qm-min=8" after
+            paramsmunge "qm-max=15" after
+            paramsmunge "sharpness=0" after
+            paramsmunge "enable-variance-boost=0" after
+            paramsmunge "qp-scale-compress-strength=0" after
+            paramsmunge "ac-bias=0" after
+            paramsmunge "noise-norm-strength=0" after
+            paramsmunge "kf-tf-strength=0" after
+            paramsmunge "alt-lambda-factors=0" after
+            paramsmunge "sharp-tx=0" after
+            paramsmunge "alt-ssim-tuning=0" after
+            paramsmunge "hbd-mds=0" after
+            paramsmunge "tx-bias=0" after
+            paramsmunge "complex-hvs=0" after
+            paramsmunge "noise-adaptive-filtering=0" after
+            paramsmunge "cdef-scaling=15" after
+        fi
+
+        # my overrides
+        paramsmunge "enable-variance-boost=1" after
+        paramsmunge "variance-boost-curve=0" after
+        paramsmunge "enable-dlf=1" after
+        paramsmunge "hbd-mds=1" after
+
+        # recommended things for film-grain
         if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
             if [ -z "${SVT_TUNE}" ]; then
                 case $SVTAV1_MAJOR in
@@ -734,7 +750,6 @@ case "${SVTAV1_FORK}" in
             fi
             paramsmunge "noise-norm-strength=3" after
         fi
-
         ;;
     "Essential")
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
