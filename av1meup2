@@ -855,7 +855,7 @@ if [ $COPY_HDR ]; then
 fi
 
 if [ ! -z "$EXTRA_PARAMS" ]; then
-    paramsmunge "${EXTRA_PARAMS}" after
+    paramsmunge ${EXTRA_PARAMS} after
 fi
 
 VIDEO="-c:V libsvtav1 -pix_fmt ${PIXEL_FORMAT} -crf ${CRF} -svtav1-params ${PARAMS}"
