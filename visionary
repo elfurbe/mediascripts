@@ -439,7 +439,7 @@ if [ ${AV1} -eq 1 ]; then
         OPTIONS="${OPTIONS} --ml-defaults"
     fi
     if [ "${SVTPARAMS:-"nope"}" != "nope" ]; then
-        OPTIONS="${OPTIONS} --params \"${SVTPARAMS}\""
+        OPTIONS="${OPTIONS} --params ${SVTPARAMS}"
     fi
     set -x
     ${AV1MEUP2} ${OPTIONS} || fail "<> Encode failed."
@@ -467,7 +467,7 @@ if [ ${HEVC} -eq 1 ]; then
         OPTIONS="${OPTIONS} --denoise"
     fi
     if [ "${X265PARAMS:-"nope"}" != "nope" ]; then
-        OPTIONS="${OPTIONS} --params \"${X265PARAMS}\""
+        OPTIONS="${OPTIONS} --params ${X265PARAMS}"
     fi
     set -x
     ${HEVCMEUP2} ${OPTIONS} || fail "<> Encode failed."
