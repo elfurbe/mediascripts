@@ -732,13 +732,37 @@ case "${SVTAV1_FORK}" in
             paramsmunge "complex-hvs=0" after
             paramsmunge "noise-adaptive-filtering=0" after
             paramsmunge "cdef-scaling=15" after
-        fi
+        else
+            # the required exhaustive settings
+            ## overriding HDR's bitrate ballooning defaults
+            paramsmunge "sharpness=0" after
+            paramsmunge "noise-norm-strength=0" after
+            paramsmunge "alt-lambda-factors=0" after
+            paramsmunge "sharp-tx=0" after
+            paramsmunge "alt-ssim-tuning=0" after
+            paramsmunge "tx-bias=0" after
+            paramsmunge "complex-hvs=0" after
+            paramsmunge "noise-adaptive-filtering=0" after
+            paramsmunge "cdef-scaling=15" after
 
-        # my overrides
-        paramsmunge "enable-variance-boost=1" after
-        paramsmunge "variance-boost-curve=0" after
-        paramsmunge "enable-dlf=1" after
-        paramsmunge "hbd-mds=1" after
+            ## these seem to be good, who could say I guess
+            paramsmunge "enable-variance-boost=1" after
+            paramsmunge "variance-boost-curve=0" after
+            paramsmunge "variance-boost-strength=1" after
+            paramsmunge "variance-octile=6" after
+            paramsmunge "enable-qm=1" after
+            paramsmunge "qm-min=4" after
+            paramsmunge "qm-max=10" after
+            paramsmunge "chroma-qm-min=6" after
+            paramsmunge "chroma-qm-max=12" after
+            paramsmunge "qp-scale-compress-strength=1" after
+            paramsmunge "ac-bias=1" after
+            paramsmunge "enable-tf=1" after
+            paramsmunge "tf-strength=3" after
+            paramsmunge "kf-tf-strength=1" after
+            paramsmunge "enable-dlf=1" after
+            paramsmunge "hbd-mds=1" after
+        fi
 
         # recommended things for film-grain
         if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
