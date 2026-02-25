@@ -734,8 +734,7 @@ case "${SVTAV1_FORK}" in
             paramsmunge "noise-adaptive-filtering=0" after
             paramsmunge "cdef-scaling=15" after
         else
-            # the required exhaustive settings
-            ## these seem to be good, who could say I guess
+            # these seem to be good, who could say I guess
             paramsmunge "variance-boost-curve=0" after
             paramsmunge "variance-boost-strength=1" after
             paramsmunge "tf-strength=3" after
