@@ -699,18 +699,19 @@ case "${SVTAV1_FORK}" in
     "HDR")
         [ $DEBUG ] && echo "SVT-AV1-HDR detected."
         if [ -z "$SVT_PRESET" ]; then
-            if [ "${SVTAV1_MAJOR}" -ge 3 ]; then
-                paramsmunge "preset=6" after
-            else
-                paramsmunge "preset=7" after
-            fi
+            case ${SVTAV1_MAJOR} in
+                2|3) paramsmunge "preset=7" after;;
+                4) paramsmunge "preset=6" after;;
+                *) paramsmunge "preset=6" after;;
+            esac
         else
             paramsmunge "preset=${SVT_PRESET}" after
         fi
         paramsmunge "keyint=${DEFAULT_GOP}" after
         case $SVTAV1_MAJOR in
             3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "progress=2" after || paramsmunge "progress=3" after;;
-            4) paramsmunge "progress=2" after
+            4) paramsmunge "progress=2" after;;
+            *) paramsmunge "progress=2" after;;
         esac
 
         if [ ${ML_DEFAULTS:-0} -eq 1 ]; then
@@ -734,34 +735,12 @@ case "${SVTAV1_FORK}" in
             paramsmunge "cdef-scaling=15" after
         else
             # the required exhaustive settings
-            ## overriding HDR's bitrate ballooning defaults
-            paramsmunge "sharpness=0" after
-            paramsmunge "noise-norm-strength=0" after
-            paramsmunge "alt-lambda-factors=0" after
-            paramsmunge "sharp-tx=0" after
-            paramsmunge "alt-ssim-tuning=0" after
-            paramsmunge "tx-bias=0" after
-            paramsmunge "complex-hvs=0" after
-            paramsmunge "noise-adaptive-filtering=0" after
-            paramsmunge "cdef-scaling=15" after
-
             ## these seem to be good, who could say I guess
-            paramsmunge "enable-variance-boost=1" after
             paramsmunge "variance-boost-curve=0" after
             paramsmunge "variance-boost-strength=1" after
-            paramsmunge "variance-octile=6" after
-            paramsmunge "enable-qm=1" after
-            paramsmunge "qm-min=4" after
-            paramsmunge "qm-max=10" after
-            paramsmunge "chroma-qm-min=6" after
-            paramsmunge "chroma-qm-max=12" after
-            paramsmunge "qp-scale-compress-strength=1" after
-            paramsmunge "ac-bias=1" after
-            paramsmunge "enable-tf=1" after
             paramsmunge "tf-strength=3" after
-            paramsmunge "kf-tf-strength=1" after
-            paramsmunge "enable-dlf=1" after
             paramsmunge "hbd-mds=1" after
+            paramsmunge "complex-hvs=1" after
         fi
 
         # recommended things for film-grain
