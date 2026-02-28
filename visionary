@@ -211,7 +211,7 @@ REMUXED="${OUTPUT}.mkv"
 [ -f "${REMUXED}" ] && fail "<> Final remux target file already exists: ${REMUXED}"
 
 #HDR=$($MEDIAINFO "${INPUT}" | $GREP ^HDR\ format | $AWK -F: '{print $2}')
-## Fetch and echo original video metadata because you always want to know and you n ever know
+## Fetch and echo original video metadata because you always want to know and you never know
 TRACK=$(${MEDIAINFO} --output=JSON "${INPUT}" | ${JQ} -r '.media.track[] | select (."@type"=="Video") | @base64')
 FPS=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
 FPS_NUM=$(echo "${TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate_Num')
@@ -524,20 +524,22 @@ fi
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
 if [ $AV1 -eq 1 ]; then
-    ${MKVMERGE} --output "${REMUXED/mkv/av1.mkv}" "${AV1_IVF}" --no-video "${OTHERTRACKS}"
+    FINAL="${REMUXED/mkv/av1.mkv}"
+    ${MKVMERGE} --output "${FINAL}" "${AV1_IVF}" --no-video "${OTHERTRACKS}"
+    ${STRIPTAGS} "${FINAL}"
+    ${STRIPCOVERS} "${FINAL}"
+    ${ADDSTATS} "${FINAL}"
     [ $? -eq 0 ] || fail "<> AV1 merge failed."
 fi
 
 if [ $HEVC -eq 1 ]; then
-    ${MKVMERGE} --output "${REMUXED/mkv/hevc.mkv}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}"
+    FINAL="${REMUXED/mkv/hevc.mkv}"
+    ${MKVMERGE} --output "${FINAL}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}"
+    ${STRIPTAGS} "${FINAL}"
+    ${STRIPCOVERS} "${FINAL}"
+    ${ADDSTATS} "${FINAL}"
     [ $? -eq 0 ] || fail "<> HEVC merge failed."
 fi
-{ set +x; } 2>/dev/null
-
-set -x
-${STRIPTAGS} "${OUTPUT}.mkv"
-${STRIPCOVERS} "${OUTPUT}.mkv"
-${ADDSTATS} "${OUTPUT}.mkv"
 { set +x; } 2>/dev/null
 echo
 
