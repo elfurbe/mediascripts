@@ -742,16 +742,40 @@ case "${SVTAV1_FORK}" in
             paramsmunge "complex-hvs=1" after
         fi
 
-        # recommended things for film-grain
-        if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
-            if [ -z "${SVT_TUNE}" ]; then
-                case $SVTAV1_MAJOR in
-                    3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "tune=4" after || paramsmunge "tune=3" after;;
-                    4) paramsmunge "tune=5" after
-                esac
-            fi
-            paramsmunge "noise-norm-strength=3" after
-        fi
+        # recommended things for film-grain retention from the HDR fork
+        # NOTE: these make the bitrate go fucking bananas
+        #  If you're a consumer with consumer sources, you're hilariously unlikely to get enough
+        #    ROI in the form of compression ratio to justify the time you're about to spend encoding.
+        #    These settings are very fastidious about detail preservation and detail preservation is
+        #    bitrate kryptonite. Even with denoising enabled at a high level, you're gonna see
+        #    huge bitrates. Since I primarily encode from consumer sources with the goal of reducing storage
+        #    space, my north star is to make things small without making them distracting to watch, and I
+        #    watch things on a consumer television in a house with windows. As such, these options are of
+        #    minimal value to me. I'm preserving them here in a comment for posterity but I cannot stress
+        #    enough that if you uncomment this you should expect little to no compression from a consumer
+        #    video source, it's frequently the case that the output bitrate will be substantially larger
+        #    than the input bitrate. We in the business call that "fucking stupid".
+        #  IF, if and only if, you're encoding from production-quality sources with gargantuan bitrates
+        #    and you want to try and preserve detail like grain, you can sure try these things but
+        #    here's the thing and I'm gonna tell ya: AV1 is a bad archival format for production sources.
+        #    It's a codec for consumer delivery, not a codec to save no-compromises copies for later use
+        #    in production scenarios. If you're just trynna get _some_ compression on your original sources
+        #    for space saving reasons and you're afraid of losing detail, stop fuckin' around with lossy codecs
+        #    and learn how to work with FFV1 like a god damned professional already. It's 100% open source, it's
+        #    built right in to FFMPEG and frankly if it's good enough for the fuckin' Library of Congress
+        #    it's probably good enough for you.
+        #    https://blogs.loc.gov/thesignal/2023/12/embracing-ffv1-matroska-container-preferred/
+
+        ## uncomment below to prioritize grain/detail presentation quality
+        #if [ -n "${FILM_GRAIN}" ] && [ "${FILM_GRAIN}" -eq "${FILM_GRAIN}" ]; then
+        #    if [ -z "${SVT_TUNE}" ]; then
+        #        case $SVTAV1_MAJOR in
+        #            3) [ $SVTAV1_PATCH -ge 3 ] && paramsmunge "tune=4" after || paramsmunge "tune=3" after;;
+        #            4) paramsmunge "tune=5" after
+        #        esac
+        #    fi
+        #    paramsmunge "noise-norm-strength=3" after
+        #fi
         ;;
     "Essential")
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
