@@ -878,6 +878,10 @@ if [ $COPY_HDR ]; then
     esac
 fi
 
+if [ ! -z "$SVT_TUNE" ]; then
+    paramsmunge "tune=${SVT_TUNE}" after
+fi
+
 if [ ! -z "$EXTRA_PARAMS" ]; then
     paramsmunge ${EXTRA_PARAMS} after
 fi
