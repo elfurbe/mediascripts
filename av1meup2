@@ -774,6 +774,8 @@ case "${SVTAV1_FORK}" in
         #    fi
         #    paramsmunge "noise-norm-strength=3" after
         #fi
+        ## if no tune is provided, force tune 2
+        [ -z "$SVT_TUNE" ] && paramsmunge "tune=2" after
         ;;
     "Essential")
         [ $DEBUG ] && echo "SVT-AV1-Essential detected."
