@@ -35,7 +35,6 @@ AV1=0
 KEEP=0
 VERIFY=0
 DENOISE=0
-CROP=0
 
 while [ $# -gt 0 ]; do
     OPT="${1}"
@@ -237,9 +236,9 @@ fi
 if [[ "${FORMATCOMPAT}" =~ "HDR10+" ]]; then
     ISHDR10P=1
     echo ">> HDR10+ metadata present"
-    if [ $CROP == 1 ]; then
+    if [ ${CROP:-0} == 1 ]; then
         echo "<> Cannot crop with HDR10+"
-        exit 1
+        unset CROP
     fi
 fi
 echo
@@ -410,7 +409,7 @@ rm "${FIFO}"
 { set +x; } 2>/dev/null
 echo
 
-if [ ${CROP} -eq 1 ]; then
+if [ ${CROP:-0} -eq 1 ]; then
     [ ${DEBUG:-0} -eq 1 ] && echo ">> finding crop from input file"
     VFCROP=$($CROPFINDER -i "${INPUT}")
 fi
