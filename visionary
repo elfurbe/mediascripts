@@ -428,9 +428,9 @@ if [ ${AV1} -eq 1 ]; then
         echo "=> Framerate not detected, that's a problem."
         exit 1
     fi
-    [ ${ISDOVI} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
-    [ ${ISHDR10P} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
-    [ ${CROP} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
+    [ ${ISDOVI:-0} -eq 1 ] && OPTIONS="${OPTIONS} --rpufile ${RPU_8}"
+    [ ${ISHDR10P:-0} -eq 1 ] && OPTIONS="${OPTIONS} --hdr10pfile ${HDR10P}"
+    [ ${CROP:-0} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
     if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "av1" ] || [ "${DENOISE}" == "svt" ]; then
         OPTIONS="${OPTIONS} --denoise"
     fi
