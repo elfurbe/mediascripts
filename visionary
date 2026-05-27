@@ -32,9 +32,6 @@ EOF
 
 HEVC=1
 AV1=0
-KEEP=0
-VERIFY=0
-DENOISE=0
 
 while [ $# -gt 0 ]; do
     OPT="${1}"
@@ -54,7 +51,8 @@ while [ $# -gt 0 ]; do
         VERIFY=1
         shift;;
     --denoise)
-        if [ -n "$2" ] && [ "$2" == "$2" ] 2>/dev/null; then shift; DENOISE=$1; else DENOISE=all; fi
+        shift
+        DENOISE="$1"
         shift;;
     --x265crf|--x265-crf)
         shift
@@ -85,7 +83,8 @@ while [ $# -gt 0 ]; do
         SVTTUNE="${1}"
         shift;;
     --svtfilmgrain|--svt-film-grain)
-        if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then shift; SVTFILMGRAIN=$1; else SVTFILMGRAIN=8; fi
+        shift
+        SVTFILMGRAIN=$1
         shift;;
     --svtmldefaults|--svt-ml-defaults)
         SVTMLDEFAULTS=1
@@ -129,7 +128,7 @@ SELF_FULLPATH=`realpath ${0}`
 SELF_DIR=`dirname ${SELF_FULLPATH}`
 [ ${NOMODULERESTORE:-0} -eq 0 ] && MODULE_COLLECTION="visionary"
 TOOLS=(mkvmerge mkvextract mediainfo grep awk dovi_tool hdr10plus_tool jq mkfifo base64 ffprobe ffmpeg SvtAv1EncApp sed bc column)
-[ ${VERIFY} -eq 1 ] && TOOLS+=(dvesverifier)
+[ ${VERIFY:-0} -eq 1 ] && TOOLS+=(dvesverifier)
 SCRIPTS=(hevcmeup2 av1meup2 striptags stripcovers addstats cropfinder)
 [ -n "${AUDIO}" ] && SCRIPTS+=(audiovise)
 
@@ -181,6 +180,21 @@ if [ ${AV1} -eq 1 ]; then
             echo "${SVTAV1_VERSION_STR}"
             exit 1
         fi
+fi
+
+if [ -n "$DENOISE" ] &>/dev/null; then
+    case "$DENOISE" in
+        "x265"|"hevc") DENOISE=hevc;;
+        "av1"|"svt") DENOISE=av1;;
+        "all") DENOISE=all;;
+        *) fail "Unrecognized denoise argument: $DENOISE";;
+    esac
+fi
+
+if [ -n "${SVTFILMGRAIN}" ]; then
+    [ "$SVTFILMGRAIN" -eq "$SVTFILMGRAIN" ] &>/dev/null || fail "Invalid svt-film-grain argument: $SVTFILMGRAIN"
+    [ "$SVTFILMGRAIN" -gt 50 ] && fail "Invalid svt-film-grain argument: $SVTFILMGRAIN"
+    [ "$SVTFILMGRAIN" -lt 1 ] && fail "Invalid svt-film-grain argument: $SVTFILMGRAIN"
 fi
 
 ## build assorted artifact filenames and make sure they don't exist
@@ -416,7 +430,7 @@ fi
 ## let's cook this sucker
 echo ">> Starting encode(s)..."; echo
 
-if [ ${AV1} -eq 1 ]; then
+if [ ${AV1} -eq 1 ] &>/dev/null; then
     echo ">> Starting SVT-AV1 encode..."
     OPTIONS="--input ${BL} --output ${AV1_IVF}"
     OPTIONS="${OPTIONS} ${SVTCRF:+--crf $SVTCRF} ${SVTPRESET:+--preset $SVTPRESET} ${SVTTUNE:+--tune $SVTTUNE} ${SVTFILMGRAIN:+--film-grain $SVTFILMGRAIN}"
@@ -449,7 +463,7 @@ elif [ -n "${SVTPRESET}" ] || [ -n "${SVTTUNE}" ] || [ -n "${SVTCRF}" ]; then
     echo "=> AV1 not enabled, ignoring AV1-related settings."
 fi
 
-if [ ${HEVC} -eq 1 ]; then
+if [ ${HEVC} -eq 1 ] &>/dev/null; then
     echo ">> Starting X265 encode..."
     OPTIONS="--input ${BL} --output ${BLX265} ${X265CRF:+--crf $X265CRF} ${X265PRESET:+--preset $X265PRESET} ${X265TUNE:+--tune $X265TUNE}"
     if [ "${FPS_NUM}" != "" ] && [ "${FPS_DEN}" != "" ] && [ "${FPS_NUM}" != "null" ] && [ "${FPS_DEN}" != "null" ]; then
@@ -494,7 +508,7 @@ if [ ${HEVC} -eq 1 ]; then
         echo ">> Dolby Vision RPU metadata merged."; echo
         echo
         ## verify, if requested, you really shouldn't request it tho
-        if [ ${VERIFY} -eq 1 ]; then
+        if [ ${VERIFY:-0} -eq 1 ]; then
             echo ">> Running Dolby Vision stream verifier"; echo
             set -x
             ${DVESVERIFIER} --input ${WITH_RPU} --rpu-compare ${RPU_8} --dv-profile ${DOVIPROFILE#dvhe.0}.${DOVILEVEL#0} --dv-level ${DOVILEVEL#0} --verbose 1 || fail "<> Dolby Vision verification failed."
@@ -542,7 +556,7 @@ fi
 { set +x; } 2>/dev/null
 echo
 
-if [ ${KEEP} -eq 1 ]; then
+if [ ${KEEP:-0} -eq 1 ]; then
     echo ">> Preserving intermediate files"
 else
     echo ">> Removing intermediate files..."; echo
