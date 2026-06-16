@@ -909,42 +909,46 @@ if [ ! -z "$START" ]; then
 fi
 
 DEINT_SUM=$(( ${YADIF:-0} + ${NNEDI:-0} ))
-if [ $DEINT_SUM -gt 1 ]; then
-    echo "Pick one deinterlace option, not more than one."
-    exit 1
-elif [ $(( ${DEINT_SUM:-0} + ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
-    echo "Don't deinterlace and also detelecine, that's bad."
-    exit 1
-elif [ $YADIFMODE ] && [ -z "$YADIF" ]; then
-    echo "Don't set yadifmode if you're not using yadif."
-    exit 1
-elif [ $YADIF ]; then
-    YADIFMODE=${YADIFMODE:=1}
+if [ $DEINT_SUM -gt 0 ]; then
     if [ "$SCANTYPE" = "Interlaced" ] || [ "$SCANTYPE" = "MBAFF" ] || [ "$SCANTYPE" = "PAFF" ]; then
-        if [ "$SCANORDER" = "Top Field First" ]; then
-            VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
-        else
-            VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+        if [ $DEINT_SUM -gt 1 ]; then
+            fail "Pick one deinterlace option, not more than one."
+        elif [ $(( ${DEINT_SUM:-0} + ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
+            fail "Don't deinterlace and also detelecine, that's bad."
+        elif [ $YADIFMODE ] && [ -z "$YADIF" ]; then
+            fail "Don't set yadifmode if you're not using yadif."
+        elif [ $YADIF ]; then
+            YADIFMODE=${YADIFMODE:=1}
+            #if [ "$SCANORDER" = "Top Field First" ]; then
+            if [ "$SCANORDER" = "TFF" ]; then
+                VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
+            else
+                VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
+            fi
+        elif [ $NNEDI ]; then
+            #if [ "$SCANORDER" = "Top Field First" ]; then
+            if [ "$SCANORDER" = "TFF" ]; then
+                FIELD="tf"
+            else
+                FIELD="bf"
+            fi
+            ## This lets me send this path in with an environment variable, but otherwise, welp
+            [ -n "${NNEDI_WEIGHTS}" ] || NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
+            [ -f "${NNEDI_WEIGHTS}" ] || fail "NNEDI_WEIGHTS file does not exist: ${NNEDI_WEIGHTS}"$'\n'"Set NNEDI_WEIGHTS environment variable to correct location or put the file at the above location"
+            NN_DEINT="all"
+            PLANES="7"
+            NSIZE="s48x6"
+            NNS="n64"
+            QUAL="slow"
+            ETYPE="a"
+            PSCRN="new3"
+            THREADS=16
+            VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
         fi
+
     else
-        if [ $DEBUG ]; then
-            echo "Input video is not interlaced, skipping deint"
-        fi
+        [ $DEBUG ] && echo "Input video is not detected as interlaced, ignoring interlacing options"
     fi
-elif [ $NNEDI ]; then
-    ## This lets me send this path in with an environment variable, but otherwise, welp
-    [ -n "${NNEDI_WEIGHTS}" ] || NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
-    [ -f "${NNEDI_WEIGHTS}" ] || fail "NNEDI_WEIGHTS file does not exist: ${NNEDI_WEIGHTS}"$'\n'"Set NNEDI_WEIGHTS environment variable to corret location or put the file at the above location"
-    NN_DEINT="all"
-    FIELD="af"
-    PLANES="7"
-    NSIZE="s48x6"
-    NNS="n64"
-    QUAL="slow"
-    ETYPE="a"
-    PSCRN="new3"
-    THREADS=16
-    VF="nnedi=$NNEDI_WEIGHTS:deint=$NN_DEINT:field=$FIELD:planes=$PLANES:nsize=$NSIZE:nns=$NNS:qual=$QUAL:etype=$ETYPE:pscrn=${PSCRN}:threads=${THREADS}${VF:+,${VF}}"
 fi
 
 if [ $(( ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
