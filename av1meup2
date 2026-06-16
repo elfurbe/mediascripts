@@ -919,23 +919,15 @@ if [ $DEINT_SUM -gt 0 ]; then
             fail "Don't set yadifmode if you're not using yadif."
         elif [ $YADIF ]; then
             YADIFMODE=${YADIFMODE:=1}
-            #if [ "$SCANORDER" = "Top Field First" ]; then
-            if [ "$SCANORDER" = "TFF" ]; then
-                VF="yadif=${YADIFMODE}:0:0${VF:+,${VF}}"
-            else
-                VF="yadif=${YADIFMODE}:1:0${VF:+,${VF}}"
-            fi
+            [ "$SCANORDER" == "TFF" ] && YADIFPARITY=0 || YADIFPARITY=1
+            YADIFDEINT=0
+            VF="yadif=${YADIFMODE}:${YADIFPARTIY}:${YADIFDEINT}${VF:+,${VF}}"
         elif [ $NNEDI ]; then
-            #if [ "$SCANORDER" = "Top Field First" ]; then
-            if [ "$SCANORDER" = "TFF" ]; then
-                FIELD="tf"
-            else
-                FIELD="bf"
-            fi
             ## This lets me send this path in with an environment variable, but otherwise, welp
             [ -n "${NNEDI_WEIGHTS}" ] || NNEDI_WEIGHTS=${FFMPEG_PREFIX}/etc/nnedi3_weights.bin
             [ -f "${NNEDI_WEIGHTS}" ] || fail "NNEDI_WEIGHTS file does not exist: ${NNEDI_WEIGHTS}"$'\n'"Set NNEDI_WEIGHTS environment variable to correct location or put the file at the above location"
             NN_DEINT="all"
+            [ "$SCANORDER" == "TFF" ] && FIELD="tf" || FIELD="bf"
             PLANES="7"
             NSIZE="s48x6"
             NNS="n64"
@@ -957,7 +949,7 @@ if [ $(( ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
 elif [ $IVTC ]; then
     VF="pullup,dejudder${VF:+,${VF}} -r 24000/1001"
 elif [ $IVTC_FIELDMATCH ]; then
-    if [ "$SCANORDER" = "Top Field First" ]; then
+    if [ "$SCANORDER" == "Top Field First" ]; then
         VF="fieldmatch=order=tff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
     else
         VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
