@@ -51,8 +51,12 @@ while [ $# -gt 0 ]; do
         VERIFY=1
         shift;;
     --denoise)
-        shift
-        DENOISE="$1"
+        if [[ $2 == -* ]] || [ -z "$2" ]; then
+            DENOISE="all"
+        else
+            shift
+            DENOISE="$1"
+        fi
         shift;;
     --x265crf|--x265-crf)
         shift
