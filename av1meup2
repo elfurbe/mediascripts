@@ -949,11 +949,8 @@ if [ $(( ${IVTC:-0} + ${IVTC_FIELDMATCH:-0} )) -gt 1 ]; then
 elif [ $IVTC ]; then
     VF="pullup,dejudder${VF:+,${VF}} -r 24000/1001"
 elif [ $IVTC_FIELDMATCH ]; then
-    if [ "$SCANORDER" == "Top Field First" ]; then
-        VF="fieldmatch=order=tff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
-    else
-        VF="fieldmatch=order=bff:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
-    fi
+    [ "$SCANORDER" == "TFF" ] && ORDER="tff" || ORDER="bff"
+    VF="fieldmatch=order=${ORDER}:combmatch=full,yadif=deint=interlaced,decimate${VF:+,${VF}}"
 fi
 
 if [ ! -z "$VIDEOFILTER" ]; then
