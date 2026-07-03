@@ -12,9 +12,9 @@ Usage: $NAME -i <INPUT FILE> -o <OUTPUT FILE>
 --opus:         transcode all lossless tracks to Opus
 --aac:          transcode all lossless tracks to AAC
 --vorbis:       transcode all lossless tracks to Vorbis
---pcmtoflac:    transcode PCM to FLAC, touch nothing else
---novideo:      strip the video track
---forcelossy:   transcode all tracks, even lossy
+--pcm-to-flac:  transcode PCM to FLAC, touch nothing else
+--no-video:     strip the video track
+--force-lossy:  transcode all tracks, even lossy
 
 EOF
 }
@@ -43,13 +43,13 @@ while [ $# -gt 0 ]; do
     --aac)
             CODEC=aac
             shift;;
-    --pcmtoflac)
+    --pcm-to-flac|--pcmtoflac)
             CODEC=pcmtoflac
             shift;;
-    --novideo)
+    --no-video|--novideo)
             NOVIDEO=1
             shift;;
-    --forcelossy)
+    --force-lossy|--forcelossy)
             FORCE_LOSSY=1
             shift;;
     -h|--help)
