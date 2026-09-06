@@ -68,7 +68,7 @@ def framecount(metadata):
 def hdrtection(metadata):
     video = mi['media']['track'][1]
     metadata['hdrformat'] = str(video['HDR_Format'])
-    metadata['hdrformatcompat'] = str(video['HDR_Format_Compatibility'])
+    #metadata['hdrformatcompat'] = str(video['HDR_Format_Compatibility'])
 
     if "Dolby" in metadata['hdrformat']:
         print("Dolby Vision data already detected")
