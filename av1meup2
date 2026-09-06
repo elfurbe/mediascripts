@@ -366,8 +366,10 @@ BITRATE_PRETTY="$(echo "scale=2; ${BITRATE} / 1024 / 1024" | ${BC} -l) Mb/s"
 SIZE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.StreamSize')
 SIZE_PRETTY="$(echo "scale=2; ${SIZE} / 1024 / 1024 / 1024" | ${BC} -l) GB"
 HDRFORMAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format')
-HDRTC=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.transfer_characteristics')
 FORMATCOMPAT=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.HDR_Format_Compatibility')
+TRANSFER_CHARS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.transfer_characteristics')
+TRANSFER_CHARS_ORIG=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.transfer_characteristics_Original')
+MATRIX_COEFF=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.matrix_coefficients')
 SCANTYPE=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanType')
 SCANORDER=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.ScanOrder')
 
@@ -398,6 +400,10 @@ if [[ "$HDRFORMAT" != "null" ]]; then
         [ "${SVTAV1_FORK}" != "mainline" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
         COPY_HDR=1
     fi
+elif [[ "$TRANSFER_CHARS" =~ "BT.2020" ]]; then
+    [ $DEBUG ] && echo "HLG format video detected: $TRANSFER_CHARS_ORIG"
+    [ "${SVTAV1_FORK}" != "mainline" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
+    COPY_HDR=1
 fi
 
 if [ $CROP ]; then
@@ -841,13 +847,13 @@ if [ $COPY_HDR ]; then
         echo "HDR VARIABLE STATE:"
         echo "-------------------------"
         for var in VIDEO_PIX_FMT VIDEO_COLOR_RANGE VIDEO_COLOR_SPACE VIDEO_COLOR_PRIMARIES VIDEO_COLOR_TRANSFER VIDEO_RED_X VIDEO_RED_Y VIDEO_GREEN_X VIDEO_GREEN_Y VIDEO_BLUE_X VIDEO_BLUE_Y VIDEO_WHITE_POINT_X VIDEO_WHITE_POINT_Y VIDEO_MIN_LUMINANCE VIDEO_MAX_LUMINANCE; do
-            [ -n "${!var}" ] && echo "$var;${!var}" || echo "$var,<unset>"
+            [ -n "${!var}" ] && echo "$var;${!var}" || echo "$var;<unset>"
         done | ${COLUMN} --separator \; --table --table-name "VARIABLE STATE" --output-separator " | "
         echo
     fi
 
     paramsmunge "color-primaries=${VIDEO_COLOR_PRIMARIES}"
-    paramsmunge "transfer-characteristics=${VIDEO_COLOR_TRANSFER}"
+    paramsmunge "transfer-characteristics=${VIDEO_COLOR_TRANSFER/arib-std-b67/hlg}"
     paramsmunge "matrix-coefficients=${VIDEO_COLOR_SPACE_FIXED}"
 
     ## parameters specific to color transfers
