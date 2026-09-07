@@ -400,7 +400,7 @@ if [[ "$HDRFORMAT" != "null" ]]; then
         [ "${SVTAV1_FORK}" != "mainline" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
         COPY_HDR=1
     fi
-elif [[ "$TRANSFER_CHARS" =~ "BT.2020" ]]; then
+elif [[ "$TRANSFER_CHARS" =~ "HLG" ]] || [[ "$TRANSFER_CHARS" =~ "BT.2020" ]]; then
     [ $DEBUG ] && echo "HLG format video detected: $TRANSFER_CHARS_ORIG"
     [ "${SVTAV1_FORK}" != "mainline" ] && [ ${SVTAV1_MAJOR} -le 2 ] && paramsmunge "enable-hdr=1"
     COPY_HDR=1
