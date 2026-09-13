@@ -228,7 +228,24 @@ CIEDE="name=ciede"
 
 VMAF_PARAMS="${VMAF_PARAMS}:feature=${VMAF_FEATURES#"|"}"
 
-[ -n "$THREADS" ] && VMAF_PARAMS="n_threads=${THREADS}:${VMAF_PARAMS}"
+## for a long time I thought threading this was pointless buuuuuut I'm wrong so we're doing threads now
+## lest you think n_threads=0 would autodetect, boy I would too but it sure doesn't work on my system
+LCPU=$([ $(uname) = 'Darwin' ] && sysctl -n hw.logicalcpu_max || lscpu -p | egrep -v '^#' | wc -l)
+PCPU=$([ $(uname) = 'Darwin' ] && sysctl -n hw.physicalcpu_max || lscpu -p | egrep -v '^#' | sort -u -t, -k 2,4 | wc -l)
+
+if [ -z ${THREADS+x} ]; then
+    # 16 seems to be where this tops out and I have no idea if SMT is good or bad for this
+    # so assuming bad, you can always override it manually. Or get a better CPU, scrub.
+    if [ ${PCPU} -ge 16 ]; then
+        THREADS=16
+    elif [ -n ${PCPU} ]; then
+        THREADS=${PCPU}
+    else
+        THREADS=0
+    fi
+fi
+
+[ $THREADS -ne 0 ] && VMAF_PARAMS="n_threads=${THREADS}:${VMAF_PARAMS}"
 
 if [ $CROPPED ]; then
     echo "The encoded file is cropped, detecting crop for make-a the magic"
