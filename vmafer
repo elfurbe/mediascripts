@@ -121,7 +121,7 @@ done
 SELF_FULLPATH=`realpath $0`
 SELF_DIR=`dirname $SELF_FULLPATH`
 # Override default tool list, we only need these two
-TOOLS=(ffmpeg ffprobe bc mediainfo jq base64 awk)
+TOOLS=(ffmpeg ffprobe bc mediainfo jq base64 awk vmaf)
 # Does not depend on any other scripts
 SCRIPTS=(cropfinder)
 if [ ! -r $SELF_DIR/toolchecker ]; then
@@ -143,6 +143,9 @@ if [ -z "$SOURCE" ]; then
     exit 1
 fi
 
+VMAF_VERSION=$($VMAF --version 2>&1)
+[ $DEBUG ] && echo "VMAF version: ${VMAF_VERSION}"
+
 ## START BUILDING THE VMAF_PARAMS STRING
 MI=$($MEDIAINFO --output=JSON "$SOURCE" | $BASE64)
 
@@ -150,7 +153,17 @@ if [ -z "$MODEL" ]; then
     WIDTH=`echo "${MI}" | $BASE64 --decode | $JQ -r '.media.track[] | select (."@type"=="Video").Width'`
 	[ $DEBUG ] && echo "SOURCE WIDTH: $WIDTH"
 
-    [ $WIDTH -gt 1920 ] && MODELFILE="vmaf_4k_v0.6.1.json" || MODELFILE="vmaf_v0.6.1.json"
+    case "$VMAF_VERSION" in
+        "3.2.0")
+            MODEL_4K="vmaf_v1.0.16/vmaf_v1.0.16_3d0h_2160.json"
+            MODEL_2K="vmaf_v1.0.16/vmaf_v1.0.16_3d0h.json";;
+        "3.0.0")
+            MODEL_4K="vmaf_4k_v0.6.1.json"
+            MODEL_2K="vmaf_v0.6.1.json";;
+        *)
+            fail "Unrecognized VMAF version: $VMAF_VERSION";;
+    esac
+    [ $WIDTH -gt 1920 ] && MODELFILE="${MODEL_4K}" || MODELFILE="${MODEL_2K}"
     [ $DEBUG ] && echo "MODELFILE: $MODELFILE"
 
     if [ ! -z "${VMAF_MODELPATH}" ] && [ -d ${VMAF_MODELPATH} ] && [ -f ${VMAF_MODELPATH}/${MODELFILE} ]; then
