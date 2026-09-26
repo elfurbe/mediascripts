@@ -32,6 +32,7 @@ Usage: ${0##*/} -i <INPUT FILE> -o <OUTPUT FILE>
 --pullup:       Alias for --ivtc
 --fieldmatch:   Inverse telecine a different way using fieldmatch filter
 --bitdepth:     Bitdepth for pixel format (8, 10 or 12, default: 10)
+--pixfmt:       Force a specific pixel format (overrides bitdepth)
 --audio:        transcode audio tracks to selected codec [flac, opus, aac]
 --square:       convert anamorphic to square pixels which make sense
 --forcelossy:   transcode all audio tracks to selected codec
@@ -130,6 +131,10 @@ while [ $# -gt 0 ]; do
             shift
             BITDEPTH="${1}"
             shift;;
+    --pixfmt)
+            shift
+            PIXFMT="${1}"
+            shift;;
     --square)
             SQUARE=1
             shift;;
@@ -198,7 +203,7 @@ SVTAV1_FFMPEG=$(${FFMPEG} -encoders 2>&1 | ${GREP} SVT-AV1 &>/dev/null && echo 1
 if [ $DEBUG ]; then
     echo "VARIABLE STATE:"
     echo "-------------------------"
-    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP PSYAUCE DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH SQUARE FORCE_LOSSY NOPIPE RPUFILE HDR10PFILE FPS DENOISE; do
+    for var in INPUT OUTPUT START DURATION CRF SVT_PRESET EXTRA_PARAMS SVT_TUNE FAST_DECODE FILM_GRAIN CROP PSYAUCE DEBUG OPROFILE VIDEOFILTER SDR YADIF YADIFMODE NNEDI IVTC IVTC_FIELDMATCH AUDIO BITDEPTH PIXFMT SQUARE FORCE_LOSSY NOPIPE RPUFILE HDR10PFILE FPS DENOISE; do
         [ -n "${!var}" ] && echo "$var;${!var}" || echo "$var;<unset>"
     done | ${COLUMN} --separator \; --table --table-name "VARIABLE STATE" --output-separator " | "
     echo
@@ -284,19 +289,23 @@ elif [ -z "$CRF" -a -z "$OPROFILE" ]; then
     fi
 fi
 
-
-BITDEPTH=${BITDEPTH:=10}
-case "${BITDEPTH}" in
-    12)
-        PIXEL_FORMAT="yuv420p12le";;
-    10)
-        PIXEL_FORMAT="yuv420p10le";;
-    8)
-        PIXEL_FORMAT="yuv420p";;
-    *)
-        echo "Bitdepth ${BITDEPTH} is invalid."
-        exit 1;;
-esac
+if [ -n "${PIXFMT}" ]; then
+    PIXEL_FORMAT="${PIXFMT}"
+    [ -n "${BITDEPTH}" ] && echo "notice: pixfmt overrides bitdepth"
+else
+    BITDEPTH=${BITDEPTH:=10}
+    case "${BITDEPTH}" in
+        12)
+            PIXEL_FORMAT="yuv420p12le";;
+        10)
+            PIXEL_FORMAT="yuv420p10le";;
+        8)
+            PIXEL_FORMAT="yuv420p";;
+        *)
+            echo "Bitdepth ${BITDEPTH} is invalid."
+            exit 1;;
+    esac
+fi
 
 if [ -z "${FPS}" ]; then
     FPS=$(echo "${VIDEO_TRACK}" | ${BASE64} --decode | ${JQ} -r '.FrameRate')
@@ -991,7 +1000,7 @@ if [ $DEBUG ]; then
     else
         SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
         SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
-        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
+        echo "nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i \"${INPUT}\" -map 0:v:0 -pix_fmt ${PIXEL_FORMAT} ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output ${OUTPUT/%mkv/ivf}"
         if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
             echo ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
             echo ${MKVMERGE} -o "${OUTPUT}" "${OUTPUT/%mkv/ivf}" "${OUTPUT/%mkv/audiovise.mkv}"
@@ -1032,7 +1041,7 @@ else
     SWITCHES=$(echo "--${PARAMS}" | sed -e 's/:/\ --/g' -e 's/=/\ /g')
     SWITCHES="--crf ${CRF} -i stdin ${SWITCHES}"
     set -x
-    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt yuv420p10le ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
+    nice -n 5 ${FFMPEG} -hide_banner -loglevel error -r ${FPS_NUM}/${FPS_DEN} -i "${INPUT}" -map 0:v:0 -pix_fmt ${PIXEL_FORMAT} ${VF:+-filter:v ${VF}} -f yuv4mpegpipe -strict -1 - | nice -n 5 ${SVTAV1ENCAPP} ${SWITCHES} --output "${OUTPUT/%mkv/ivf}" || fail "encode error."
     { set +x; } 2>/dev/null
     if [ -n "${AUDIO}" ] && [[ "${AUDIO_FLAGS}" =~ "${AUDIO}" ]]; then
         ${AUDIOVISE} --${AUDIO} --novideo --input "${INPUT}" --output "${OUTPUT/%mkv/audiovise.mkv}"
