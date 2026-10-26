@@ -478,8 +478,8 @@ if [ ${HEVC} -eq 1 ] &>/dev/null; then
         echo "=> Framerate not detected, that's a problem."
         exit 1
     fi
-    [ ${ISDOVI} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
-    [ ${CROP} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
+    [ ${ISDOVI:-0} -eq 1 ] && OPTIONS="$OPTIONS --dovi-bl"
+    [ ${CROP:-0} -eq 1 ] && OPTIONS="${OPTIONS} --vf ${VFCROP}"
     if [ "${DENOISE}" == "all" ] || [ "${DENOISE}" == "x265" ] || [ "${DENOISE}" == "hevc" ]; then
         OPTIONS="${OPTIONS} --denoise"
     fi
@@ -493,7 +493,7 @@ if [ ${HEVC} -eq 1 ] &>/dev/null; then
     echo ">> X265 encode finished."
     ## time to put the sidecars back in the garage
     ## do HDR10+ injection first, if need be
-    if [ ${ISHDR10P} -eq 1 ]; then
+    if [ ${ISHDR10P:-0} -eq 1 ]; then
         echo ">> Injecting HDR10+ metadata into transcoded base layer..."; echo
         set -x
         ${HDR10PLUS_TOOL} inject --input ${COOKED} --json ${HDR10P} --output ${BL10P} || fail "<> HDR10+ injection failed."
@@ -504,7 +504,7 @@ if [ ${HEVC} -eq 1 ] &>/dev/null; then
         FINALVIDEO_HEVC="${BL10P}"
     fi
     ## dovi injection, if need be
-    if [ ${ISDOVI} -eq 1 ]; then
+    if [ ${ISDOVI:-0} -eq 1 ]; then
         echo ">> Injecting Dolby Vision RPU into transcoded BL..."; echo
         set -x
         ${DOVI_TOOL} inject-rpu --input ${COOKED} --rpu-in ${RPU_8} --output ${WITH_RPU} || fail "<> RPU injection failed."
@@ -540,7 +540,7 @@ fi
 
 echo ">> Remuxing transcoded video with other source tracks..."; echo
 set -x
-if [ $AV1 -eq 1 ]; then
+if [ ${AV1:-0} -eq 1 ]; then
     FINAL="${REMUXED/mkv/av1.mkv}"
     ${MKVMERGE} --output "${FINAL}" "${AV1_IVF}" --no-video "${OTHERTRACKS}"
     ${STRIPTAGS} "${FINAL}"
@@ -549,7 +549,7 @@ if [ $AV1 -eq 1 ]; then
     [ $? -eq 0 ] || fail "<> AV1 merge failed."
 fi
 
-if [ $HEVC -eq 1 ]; then
+if [ ${HEVC:-0} -eq 1 ]; then
     FINAL="${REMUXED/mkv/hevc.mkv}"
     ${MKVMERGE} --output "${FINAL}" "${FINALVIDEO_HEVC}" --no-video "${OTHERTRACKS}"
     ${STRIPTAGS} "${FINAL}"
